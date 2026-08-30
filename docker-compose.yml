@@ -1,0 +1,81 @@
+name: tramplin
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tramplin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tramplin}
+      POSTGRES_DB: ${POSTGRES_DB:-tramplin}
+      TZ: UTC
+      PGTZ: UTC
+    command: ["postgres", "-c", "timezone=UTC"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tramplin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: tramplin
+      MINIO_ROOT_PASSWORD: tramplin-dev-secret
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 tramplin tramplin-dev-secret; do sleep 1; done
+        mc mb --ignore-existing local/tramplin
+        mc anonymous set download local/tramplin
+
+  api:
+    build: .
+    image: ${DOCKER_IMAGE_API:-tramplin-api:local}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tramplin:tramplin@postgres:5432/tramplin
+      REDIS_URL: redis://redis:6379/0
+      S3_ACCESS_KEY: tramplin
+      S3_SECRET_KEY: tramplin-dev-secret
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_URL: http://localhost:9000/tramplin
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    profiles: ["full"]
+
+volumes:
+  postgres_data:
+  minio_data:

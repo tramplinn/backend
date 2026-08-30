@@ -1,0 +1,204 @@
+# Tramplin — backend.
+#
+# Переменные проекта, которые нужно завести в GitLab (Settings → CI/CD → Variables):
+#   SERVER_IP        адрес сервера развёртывания
+#   SSH_PRIVATE_KEY  приватный ключ в base64 (masked)
+#   STAGE_ENV        содержимое runtime env для stage (masked)
+#   PROD_ENV         то же для production (masked)
+#   STAGE_URL        адрес stage — по нему же ходит DAST
+#   PROD_URL         адрес production
+#
+# STAGE_ENV и PROD_ENV обязаны содержать POSTGRES_*, REDIS_PASSWORD,
+# cloud S3, OAuth/JWT и разные API_PORT, если среды находятся на одном сервере.
+# PostgreSQL и Redis разворачиваются с volumes, MinIO не используется.
+# Реестр ($CI_REGISTRY*) GitLab подставляет сам.
+
+stages:
+  - lint
+  - test
+  - security
+  - build
+  - deploy
+  - dast
+
+default:
+  tags:
+    - docker
+    - linux
+
+variables:
+  DOCKER_IMAGE_API: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG"
+  SSH_PORT: "15945"
+  SSH_USER: "user1"
+  SSH_HOST: "$SERVER_IP"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+
+# Именно 3.13: requires-python не даст поставить зависимости на 3.12.
+.python:
+  image: ghcr.io/astral-sh/uv:python3.13-bookworm
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .uv-cache
+  before_script:
+    - uv sync --frozen
+  after_script:
+    - uv cache prune --ci
+
+.on-merge-and-branches:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH"
+
+lint:
+  extends:
+    - .python
+    - .on-merge-and-branches
+  stage: lint
+  script:
+    - uv run ruff check src tests scripts alembic
+    - uv run ruff format --check src tests scripts alembic
+
+typecheck:
+  extends:
+    - .python
+    - .on-merge-and-branches
+  stage: lint
+  script:
+    - uv run mypy src tests scripts alembic
+
+test:
+  extends:
+    - .python
+    - .on-merge-and-branches
+  stage: test
+  script:
+    - uv run pytest --junitxml=report.xml --cov-report=xml:coverage.xml
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 7 days
+
+# --no-git: история склонирована обрезанной, обход коммитов дал бы разный
+# результат от запуска к запуску.
+gitleaks:
+  extends: .on-merge-and-branches
+  stage: security
+  image:
+    name: zricethezav/gitleaks:v8.18.2
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --no-git --verbose --redact
+
+semgrep:
+  extends: .on-merge-and-branches
+  stage: security
+  image: semgrep/semgrep
+  script:
+    - semgrep scan --config=p/python --config=p/owasp-top-ten --error .
+
+trivy-sca:
+  extends: .on-merge-and-branches
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
+
+build-and-push:
+  stage: build
+  image: docker:27.5.0
+  services:
+    - docker:27.5.0-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    # В Dockerfile одна стадия, поэтому --target не нужен.
+    - docker build --pull -t "$DOCKER_IMAGE_API" .
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 1 "$DOCKER_IMAGE_API"
+    - docker push "$DOCKER_IMAGE_API"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "stage"'
+
+.deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | base64 -d | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo -e "Host *\n\tStrictHostKeyChecking accept-new\n\tPort $SSH_PORT\n" > ~/.ssh/config
+    - chmod 600 ~/.ssh/config
+  script:
+    - ssh $SSH_USER@$SSH_HOST "mkdir -p $DEPLOY_PATH"
+    - scp docker-compose.staging.yml $SSH_USER@$SSH_HOST:$DEPLOY_PATH/docker-compose.staging.yml
+    - printf '%s\n' "$ENV_CONTENT" | ssh $SSH_USER@$SSH_HOST "umask 077 && cat > $DEPLOY_PATH/.env.runtime && chmod 600 $DEPLOY_PATH/.env.runtime"
+    - |
+      ssh $SSH_USER@$SSH_HOST "
+        set -e
+        cd $DEPLOY_PATH
+        export DOCKER_IMAGE_API='$DOCKER_IMAGE_API'
+        export COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME'
+        export APP_ENV_FILE='.env.runtime'
+        echo '$CI_REGISTRY_PASSWORD' | docker login -u '$CI_REGISTRY_USER' --password-stdin '$CI_REGISTRY'
+        docker pull '$DOCKER_IMAGE_API'
+        docker compose --env-file .env.runtime -f docker-compose.staging.yml config --quiet
+        docker compose --env-file .env.runtime -f docker-compose.staging.yml up -d --wait --wait-timeout 60 postgres redis
+        docker compose --env-file .env.runtime -f docker-compose.staging.yml run --rm --no-deps api alembic upgrade head
+        docker compose --env-file .env.runtime -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 60 api
+        docker image prune -f
+        docker logout '$CI_REGISTRY'
+      "
+
+deploy_stage:
+  extends: .deploy
+  variables:
+    DEPLOY_PATH: "/home/user1/apps/backend_stage"
+    ENV_CONTENT: "$STAGE_ENV"
+    COMPOSE_PROJECT_NAME: "tramplin-stage"
+  environment:
+    name: staging
+    url: "$STAGE_URL"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "stage"'
+
+deploy_prod:
+  extends: .deploy
+  variables:
+    DEPLOY_PATH: "/home/user1/apps/backend_prod"
+    ENV_CONTENT: "$PROD_ENV"
+    COMPOSE_PROJECT_NAME: "tramplin-prod"
+  environment:
+    name: production
+    url: "$PROD_URL"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+nuclei-scan:
+  stage: dast
+  image:
+    name: projectdiscovery/nuclei:v3.3.8
+    entrypoint: [""]
+  script:
+    - nuclei -u "$TARGET_URL" -severity critical,high,medium -tags cve,exposure,misconfiguration -duc -jsonl -o nuclei-report.jsonl
+  artifacts:
+    when: always
+    paths:
+      - nuclei-report.jsonl
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "stage"'
+      variables:
+        TARGET_URL: "$STAGE_URL"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      variables:
+        TARGET_URL: "$PROD_URL"

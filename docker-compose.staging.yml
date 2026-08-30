@@ -1,0 +1,96 @@
+name: ${COMPOSE_PROJECT_NAME:-tramplin-staging}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tramplin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tramplin}
+      TZ: UTC
+      PGTZ: UTC
+    command: ["postgres", "-c", "timezone=UTC"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    shm_size: 256mb
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    stop_grace_period: 20s
+
+  api:
+    build:
+      context: .
+    image: ${DOCKER_IMAGE_API:-tramplin-api:staging}
+    env_file:
+      - ${APP_ENV_FILE:-.env.staging}
+    environment:
+      DATABASE_URL: >-
+        postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tramplin}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${API_BIND_HOST:-127.0.0.1}:${API_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 20s
+
+volumes:
+  postgres_data:
+  redis_data:
