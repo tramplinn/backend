@@ -59,7 +59,7 @@ services:
     image: ${DOCKER_IMAGE_API:-tramplin-api:local}
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://tramplin:tramplin@postgres:5432/tramplin
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD:-tramplin}@postgres:5432/${POSTGRES_DB:-tramplin}
       REDIS_URL: redis://redis:6379/0
       S3_ACCESS_KEY: tramplin
       S3_SECRET_KEY: tramplin-dev-secret

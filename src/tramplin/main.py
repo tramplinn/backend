@@ -26,6 +26,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="Tramplin API",
         version="0.1.0",
         docs_url=None if settings.is_production else "/docs",
+        openapi_url=None if settings.is_production else "/openapi.json",
         redoc_url=None,
         lifespan=lifespan,
     )
