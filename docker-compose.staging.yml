@@ -1,9 +1,16 @@
 name: ${COMPOSE_PROJECT_NAME:-tramplin-staging}
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tramplin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -17,9 +24,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -29,6 +34,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     command:
@@ -44,9 +50,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test:
-        - CMD-SHELL
-        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
       interval: 10s
       timeout: 3s
       retries: 10
@@ -57,6 +61,8 @@ services:
     build:
       context: .
     image: ${DOCKER_IMAGE_API:-tramplin-api:staging}
+    restart: unless-stopped
+    logging: *logging
     env_file:
       - ${APP_ENV_FILE:-.env.staging}
     environment:
@@ -64,7 +70,6 @@ services:
         postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tramplin}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
     init: true
-    restart: unless-stopped
     ports:
       - "${API_BIND_HOST:-127.0.0.1}:${API_PORT:-8000}:8000"
     read_only: true
@@ -77,19 +82,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - >-
-          import urllib.request;
-          urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+    networks:
+      default: {}
+      # Прокси ходит в API по этому имени, а не по порту хоста: алиас
+      # предсказуем и не зависит от порядкового номера контейнера.
+      edge:
+        aliases:
+          - ${COMPOSE_PROJECT_NAME:-tramplin}-api
     stop_grace_period: 20s
+
+networks:
+  default: {}
+  # Общая сеть с пограничным стендом. Создаётся репозиторием infra, поэтому
+  # infra выкатывается первым.
+  edge:
+    external: true
+    name: tramplin-edge
 
 volumes:
   postgres_data:
