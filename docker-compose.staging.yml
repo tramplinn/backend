@@ -1,16 +1,19 @@
 name: ${COMPOSE_PROJECT_NAME:-tramplin-staging}
 
-x-logging: &logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
+x-service: &service
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   postgres:
+    <<: *service
     image: postgres:17-alpine
-    restart: unless-stopped
-    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tramplin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -21,8 +24,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     shm_size: 256mb
-    security_opt:
-      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
@@ -32,9 +33,8 @@ services:
     stop_grace_period: 30s
 
   redis:
+    <<: *service
     image: redis:7-alpine
-    restart: unless-stopped
-    logging: *logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     command:
@@ -47,8 +47,6 @@ services:
       - ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    security_opt:
-      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
       interval: 10s
@@ -58,11 +56,10 @@ services:
     stop_grace_period: 20s
 
   api:
+    <<: *service
     build:
       context: .
     image: ${DOCKER_IMAGE_API:-tramplin-api:staging}
-    restart: unless-stopped
-    logging: *logging
     env_file:
       - ${APP_ENV_FILE:-.env.staging}
     environment:
@@ -75,8 +72,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
-    security_opt:
-      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,8 +79,6 @@ services:
         condition: service_healthy
     networks:
       default: {}
-      # Прокси ходит в API по этому имени, а не по порту хоста: алиас
-      # предсказуем и не зависит от порядкового номера контейнера.
       edge:
         aliases:
           - ${COMPOSE_PROJECT_NAME:-tramplin}-api
@@ -93,8 +86,6 @@ services:
 
 networks:
   default: {}
-  # Общая сеть с пограничным стендом. Создаётся репозиторием infra, поэтому
-  # infra выкатывается первым.
   edge:
     external: true
     name: tramplin-edge
