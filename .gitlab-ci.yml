@@ -1,14 +1,3 @@
-# Tramplin — backend.
-#
-# Переменные проекта (Settings → CI/CD → Variables), все Protected:
-#   SERVER_IP        адрес сервера развёртывания
-#   SSH_PRIVATE_KEY  приватный ключ user1, base64 одной строкой (Masked)
-#   STAGE_ENV        .env.runtime для stage — тип File: GitLab сам кладёт содержимое
-#                    во временный файл, а $STAGE_ENV в джобе это путь к нему
-#   PROD_ENV         то же для production, тоже File
-#   STAGE_URL        адрес stage, по нему же ходит DAST
-#   PROD_URL         адрес production
-
 stages:
   - lint
   - test
@@ -24,11 +13,10 @@ default:
 
 variables:
   DOCKER_IMAGE_API: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG"
+  DOCKER_IMAGE_API_SHA: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
   SSH_USER: "user1"
   SSH_PORT: "15945"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
-
-# --- шаблоны ---------------------------------------------------------------
 
 .python:
   image: ghcr.io/astral-sh/uv:python3.13-bookworm
@@ -51,8 +39,6 @@ variables:
 .on-deploy-branches:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "stage"'
-
-# --- проверки --------------------------------------------------------------
 
 lint:
   extends:
@@ -113,23 +99,25 @@ trivy-sca:
   script:
     - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
 
-# --- сборка ----------------------------------------------------------------
-
 build-and-push:
   extends: .on-deploy-branches
   stage: build
   image: docker:27.5.0
+  retry:
+    max: 2
+    when:
+      - script_failure
+      - runner_system_failure
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - docker build --pull -t "$DOCKER_IMAGE_API" .
+    - docker build --pull -t "$DOCKER_IMAGE_API" -t "$DOCKER_IMAGE_API_SHA" .
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest
       image --severity HIGH,CRITICAL --exit-code 1 "$DOCKER_IMAGE_API"
+    - docker push "$DOCKER_IMAGE_API_SHA"
     - docker push "$DOCKER_IMAGE_API"
   after_script:
     - docker logout "$CI_REGISTRY"
-
-# --- деплой ----------------------------------------------------------------
 
 .deploy:
   stage: deploy
@@ -149,8 +137,9 @@ build-and-push:
     - printf '%s' "$CI_REGISTRY_PASSWORD" |
       ssh "$SSH_USER@$SERVER_IP" "docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY"
     - ssh "$SSH_USER@$SERVER_IP"
-      "DOCKER_IMAGE_API=$DOCKER_IMAGE_API COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME CI_REGISTRY=$CI_REGISTRY
+      "DOCKER_IMAGE_API=$DOCKER_IMAGE_API_SHA COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
        bash $DEPLOY_PATH/deploy.sh"
+    - ssh "$SSH_USER@$SERVER_IP" "docker image prune -f && docker logout $CI_REGISTRY"
 
 deploy_stage:
   extends: .deploy
@@ -175,8 +164,6 @@ deploy_prod:
     url: "$PROD_URL"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-
-# --- DAST ------------------------------------------------------------------
 
 nuclei-scan:
   stage: dast
