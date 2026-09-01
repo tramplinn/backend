@@ -172,7 +172,7 @@ nuclei-scan:
     entrypoint: [""]
   script:
     - nuclei -u "$TARGET_URL" -severity critical,high,medium
-      -tags cve,exposure,misconfiguration -duc -jsonl -o nuclei-report.jsonl
+      -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
   artifacts:
     when: always
     paths:
