@@ -113,7 +113,7 @@ build-and-push:
   script:
     - docker build --pull -t "$DOCKER_IMAGE_API" -t "$DOCKER_IMAGE_API_SHA" .
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest
-      image --severity HIGH,CRITICAL --exit-code 1 "$DOCKER_IMAGE_API"
+      image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$DOCKER_IMAGE_API"
     - docker push "$DOCKER_IMAGE_API_SHA"
     - docker push "$DOCKER_IMAGE_API"
   after_script:

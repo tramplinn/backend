@@ -15,7 +15,9 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY src ./src
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev \
+    && /usr/local/bin/python -m pip uninstall -y pip \
+    && rm -f /usr/local/bin/uv
 
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin appuser
 USER appuser
