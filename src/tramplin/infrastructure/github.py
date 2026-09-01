@@ -52,7 +52,7 @@ class GitHubOAuthClient:
         payload = _as_object(_body(response))
         token = _text(payload.get("access_token"))
         if token is None:
-            logger.warning("github token exchange failed: %s", payload.get("error"))
+            logger.warning("github oauth code exchange failed: %s", payload.get("error"))
             raise OAuthProviderError("GitHub не выдал access-токен")
         return token
 
