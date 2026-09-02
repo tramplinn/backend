@@ -122,7 +122,7 @@ build-and-push:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - docker build --pull -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA" .
+    - docker build --pull --provenance=false -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA" .
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.74.0
       image --scanners vuln --severity HIGH,CRITICAL --exit-code 1
       "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
