@@ -1,5 +1,6 @@
 import asyncio as asyncio
 import logging
+import sys
 from typing import Any
 
 import httpx
@@ -105,5 +106,23 @@ async def run() -> None:
     await create_worker().app.run()
 
 
+async def rabbitmq_is_healthy(settings: Settings | None = None) -> bool:
+    settings = settings or load_settings()
+    broker = RabbitBroker(settings.rabbitmq_url)
+    try:
+        return await broker.ping(timeout=2)
+    finally:
+        await broker.stop()
+
+
+def main() -> None:
+    if not sys.argv[1:]:
+        asyncio.run(run())
+        return
+    if sys.argv[1:] == ["healthcheck"]:
+        raise SystemExit(0 if asyncio.run(rabbitmq_is_healthy()) else 1)
+    raise SystemExit("usage: python -m tramplin.worker [healthcheck]")
+
+
 if __name__ == "__main__":
-    asyncio.run(run())
+    main()

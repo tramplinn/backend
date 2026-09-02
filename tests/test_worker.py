@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any, cast
@@ -126,3 +127,52 @@ async def test_worker_lifecycle_starts_and_stops_resources(
     gather.assert_awaited_once_with(task, return_exceptions=True)
     client.aclose.assert_awaited_once_with()
     engine.dispose.assert_awaited_once_with()
+
+
+async def test_worker_healthcheck_pings_and_closes_broker(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+) -> None:
+    broker = SimpleNamespace(ping=AsyncMock(return_value=True), stop=AsyncMock())
+    broker_factory = Mock(return_value=broker)
+    monkeypatch.setattr(worker, "RabbitBroker", broker_factory)
+
+    assert await worker.rabbitmq_is_healthy(settings)
+
+    broker_factory.assert_called_once_with(settings.rabbitmq_url)
+    broker.ping.assert_awaited_once_with(timeout=2)
+    broker.stop.assert_awaited_once_with()
+
+
+def test_worker_main_runs_application(monkeypatch: pytest.MonkeyPatch) -> None:
+    run = AsyncMock()
+    monkeypatch.setattr(worker, "run", run)
+    monkeypatch.setattr(sys, "argv", ["worker"])
+
+    worker.main()
+
+    run.assert_awaited_once_with()
+
+
+@pytest.mark.parametrize(("healthy", "exit_code"), [(True, 0), (False, 1)])
+def test_worker_main_healthcheck(
+    monkeypatch: pytest.MonkeyPatch,
+    healthy: bool,
+    exit_code: int,
+) -> None:
+    healthcheck = AsyncMock(return_value=healthy)
+    monkeypatch.setattr(worker, "rabbitmq_is_healthy", healthcheck)
+    monkeypatch.setattr(sys, "argv", ["worker", "healthcheck"])
+
+    with pytest.raises(SystemExit) as error:
+        worker.main()
+
+    assert error.value.code == exit_code
+    healthcheck.assert_awaited_once_with()
+
+
+def test_worker_main_rejects_unknown_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["worker", "unknown"])
+
+    with pytest.raises(SystemExit, match=r"usage: python -m tramplin\.worker"):
+        worker.main()
