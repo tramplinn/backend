@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from tramplin.core.config import Settings
 from tramplin.core.security import generate_token
 from tramplin.infrastructure.redis_store import RedisNamespace
+from tramplin.models.enums import IdentityProvider
 from tramplin.services.contracts import OAuthState
 
 NAMESPACE = "oauth:state"
@@ -25,4 +26,12 @@ class OAuthStateStore:
 
     async def consume(self, token: str) -> OAuthState | None:
         raw = await self._states.take(token)
-        return None if raw is None else OAuthState(**json.loads(raw))
+        if raw is None:
+            return None
+        payload = json.loads(raw)
+        return OAuthState(
+            provider=IdentityProvider(payload["provider"]),
+            purpose=payload["purpose"],
+            user_id=payload.get("user_id"),
+            next_path=payload.get("next_path", "/"),
+        )

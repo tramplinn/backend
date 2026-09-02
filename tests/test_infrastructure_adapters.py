@@ -186,7 +186,10 @@ async def test_redis_namespace_and_oauth_state(settings: Settings) -> None:
     token = await store.issue(state)
     raw = redis.set.await_args.args[1]
     redis.getdel.return_value = raw
-    assert await store.consume(token) == state
+    consumed = await store.consume(token)
+    assert consumed == state
+    assert consumed is not None
+    assert consumed.provider is IdentityProvider.GITHUB
     redis.getdel.return_value = None
     assert await store.consume(token) is None
 
