@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import openai
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionMessageParam
 
 from tramplin.core.config import Settings
@@ -39,15 +39,24 @@ class LlmClient:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        timeout = settings.llm_timeout.total_seconds()
+        self._http_client = (
+            DefaultAsyncHttpxClient(proxy=settings.llm_proxy_url, timeout=timeout)
+            if settings.llm_proxy_url
+            else None
+        )
         self._client = AsyncOpenAI(
             api_key=settings.llm_api_key.get_secret_value() or "not-configured",
             base_url=settings.llm_base_url,
-            timeout=settings.llm_timeout.total_seconds(),
+            timeout=timeout,
             max_retries=settings.llm_retries,
+            http_client=self._http_client,
         )
 
     async def aclose(self) -> None:
         await self._client.close()
+        if self._http_client is not None:
+            await self._http_client.aclose()
 
     async def stream(self, prompt: ChatPrompt) -> AsyncIterator[str]:
         if not self._settings.llm_enabled:

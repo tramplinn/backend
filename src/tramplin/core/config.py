@@ -55,7 +55,7 @@ class Settings(DatabaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: SecretStr = SecretStr("")
     llm_model: str = ""
-    # max_tokens, а не max_completion_tokens: второе понимает только сам OpenAI.
+    llm_proxy_url: str | None = None
     llm_max_tokens: int = 900
     llm_temperature: float = 0.2
     llm_timeout: Duration = timedelta(seconds=90)
