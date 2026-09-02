@@ -91,15 +91,16 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name="pk_algorithm_problems"),
         *_audit_fks("algorithm_problems"),
         sa.CheckConstraint(
-            "time_limit_ms BETWEEN 50 AND 5000", name="ck_algorithm_problems_algorithm_problem_time"
+            "time_limit_ms BETWEEN 50 AND 5000",
+            name=op.f("ck_algorithm_problems_algorithm_problem_time"),
         ),
         sa.CheckConstraint(
             "memory_limit_kb BETWEEN 16384 AND 524288",
-            name="ck_algorithm_problems_algorithm_problem_memory",
+            name=op.f("ck_algorithm_problems_algorithm_problem_memory"),
         ),
         sa.CheckConstraint(
             "provider = 'internal' OR external_url IS NOT NULL",
-            name="ck_algorithm_problems_algorithm_problem_external_url",
+            name=op.f("ck_algorithm_problems_algorithm_problem_external_url"),
         ),
     )
     op.create_table(
@@ -120,7 +121,10 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         *_audit_fks("algorithm_test_cases"),
-        sa.CheckConstraint("weight > 0", name="ck_algorithm_test_cases_algorithm_test_case_weight"),
+        sa.CheckConstraint(
+            "weight > 0",
+            name=op.f("ck_algorithm_test_cases_algorithm_test_case_weight"),
+        ),
         sa.UniqueConstraint(
             "problem_id",
             "position",
@@ -265,7 +269,7 @@ def upgrade() -> None:
         *_audit_fks("algorithm_submissions"),
         sa.CheckConstraint(
             "kind = 'run' OR custom_input IS NULL",
-            name="ck_algorithm_submissions_algorithm_submission_submit_no_input",
+            name=op.f("ck_algorithm_submissions_algorithm_submission_submit_no_input"),
         ),
     )
     op.create_index(
@@ -340,7 +344,11 @@ def upgrade() -> None:
     op.create_unique_constraint(
         "uq_module_items_practice_set_id", "module_items", ["practice_set_id"]
     )
-    op.drop_constraint("ck_module_items_module_items_one_target", "module_items", type_="check")
+    op.drop_constraint(
+        op.f("ck_module_items_module_items_one_target"),
+        "module_items",
+        type_="check",
+    )
     op.create_check_constraint(
         "module_items_one_target",
         "module_items",
@@ -349,7 +357,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_module_items_module_items_one_target", "module_items", type_="check")
+    op.drop_constraint(
+        op.f("ck_module_items_module_items_one_target"),
+        "module_items",
+        type_="check",
+    )
     op.create_check_constraint(
         "module_items_one_target", "module_items", "num_nonnulls(lesson_id, quiz_id) = 1"
     )
