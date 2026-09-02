@@ -1,8 +1,8 @@
 import uuid_utils.compat as uuid
 
 from tramplin.models.enums import IdentityProvider, UserRole
-from tramplin.models.users import RefreshToken, StudentGroup, User, UserIdentity
-from tramplin.services.contracts import GitHubProfile, OAuthState
+from tramplin.models.users import RefreshToken, User, UserIdentity
+from tramplin.services.contracts import OAuthProfile, OAuthState
 
 
 class FakeSession:
@@ -22,7 +22,6 @@ class FakeUserRepository:
         *,
         query: str | None,
         role: UserRole | None,
-        group_id: uuid.UUID | None,
         is_active: bool | None,
         limit: int,
         offset: int,
@@ -40,8 +39,6 @@ class FakeUserRepository:
             ]
         if role is not None:
             users = [user for user in users if user.role == role]
-        if group_id is not None:
-            users = [user for user in users if user.group_id == group_id]
         if is_active is not None:
             users = [user for user in users if user.is_active == is_active]
         return users[offset : offset + limit], len(users)
@@ -97,24 +94,6 @@ class FakeIdentityRepository:
         self.identities.remove(identity)
 
 
-class FakeGroupRepository:
-    def __init__(self) -> None:
-        self.groups: list[StudentGroup] = []
-
-    async def list(self) -> list[StudentGroup]:
-        return self.groups
-
-    async def get(self, group_id: uuid.UUID) -> StudentGroup | None:
-        return next((group for group in self.groups if group.id == group_id), None)
-
-    def add(self, group: StudentGroup) -> StudentGroup:
-        self.groups.append(group)
-        return group
-
-    async def delete(self, group: StudentGroup) -> None:
-        self.groups.remove(group)
-
-
 class FakeRefreshTokenRepository:
     def __init__(self) -> None:
         self.tokens: list[RefreshToken] = []
@@ -136,7 +115,7 @@ class FakeRefreshTokenRepository:
 
 
 class FakeGitHubClient:
-    def __init__(self, profile: GitHubProfile) -> None:
+    def __init__(self, profile: OAuthProfile) -> None:
         self.profile = profile
         self.exchanged_codes: list[str] = []
 
@@ -147,7 +126,7 @@ class FakeGitHubClient:
         self.exchanged_codes.append(code)
         return "gho_test_token"
 
-    async def fetch_profile(self, access_token: str) -> GitHubProfile:
+    async def fetch_profile(self, access_token: str) -> OAuthProfile:
         return self.profile
 
 

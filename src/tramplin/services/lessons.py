@@ -6,7 +6,7 @@ from anyio import to_thread
 from tramplin.core.errors import NotFoundError
 from tramplin.models.content import InterviewCard, Lesson
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import apply_changes, mark_created, mark_updated
+from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
 from tramplin.services.lesson_markdown import RenderedLessonContent, render_lesson_content
 from tramplin.services.modules import ModuleRepositoryPort, next_module_item
 
@@ -67,11 +67,12 @@ class LessonService:
         if lesson is None:
             raise NotFoundError("Урок не найден")
         body_md = changes.get("body_md")
-        apply_changes(
-            lesson,
-            changes,
-            required={"title", "slug", "body_md", "status"},
-        )
+        validate_required_updates(changes, {"title", "slug", "body_md", "status"})
+        lesson.title = changes.get("title", lesson.title)
+        lesson.slug = changes.get("slug", lesson.slug)
+        lesson.est_minutes = changes.get("est_minutes", lesson.est_minutes)
+        lesson.body_md = changes.get("body_md", lesson.body_md)
+        lesson.status = changes.get("status", lesson.status)
         if body_md is not None:
             self._apply_rendered_content(lesson, await self.preview(body_md), actor_id)
         mark_updated(lesson, actor_id)

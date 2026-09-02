@@ -1,5 +1,6 @@
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -13,7 +14,7 @@ from tramplin.core.errors import (
 )
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
-from tramplin.services.contracts import GitHubProfile, OAuthState, Transaction
+from tramplin.services.contracts import OAuthProfile, OAuthState, Transaction
 from tramplin.services.session import SessionService, TokenPair
 from tramplin.services.users import (
     UserIdentityRepositoryPort,
@@ -22,12 +23,12 @@ from tramplin.services.users import (
 )
 
 
-class GitHubOAuthPort(Protocol):
+class OAuthClientPort(Protocol):
     def authorize_url(self, state: str) -> str: ...
 
     async def exchange_code(self, code: str) -> str: ...
 
-    async def fetch_profile(self, access_token: str) -> GitHubProfile: ...
+    async def fetch_profile(self, access_token: str) -> OAuthProfile: ...
 
 
 class OAuthStateStorePort(Protocol):
@@ -38,7 +39,6 @@ class OAuthStateStorePort(Protocol):
 
 logger = logging.getLogger(__name__)
 
-PROVIDER: Final = IdentityProvider.GITHUB
 LOGIN_FORBIDDEN: Final = re.compile(r"[^a-z0-9_-]+")
 FALLBACK_LOGIN: Final = "student"
 MAX_LOGIN_LENGTH: Final = 48
@@ -52,47 +52,55 @@ class AuthResult:
     next_path: str
 
 
-class GitHubAuthService:
+class OAuthAuthService:
+    """Одна и та же логика входа для любого провайдера: различия живут в клиенте."""
+
     def __init__(
         self,
         session: Transaction,
         users: UserRepositoryPort,
         identities: UserIdentityRepositoryPort,
-        github: GitHubOAuthPort,
+        provider: IdentityProvider,
+        client: OAuthClientPort,
         state_store: OAuthStateStorePort,
         sessions: SessionService,
     ) -> None:
         self._session = session
         self._users = users
         self._identities = identities
-        self._github = github
+        self._provider = provider
+        self._client = client
         self._state_store = state_store
         self._sessions = sessions
 
+    @property
+    def provider(self) -> IdentityProvider:
+        return self._provider
+
     async def start_login(self, next_path: str = "/") -> str:
         state = await self._state_store.issue(
-            OAuthState(provider=PROVIDER, purpose="login", next_path=next_path),
+            OAuthState(provider=self._provider, purpose="login", next_path=next_path),
         )
-        return self._github.authorize_url(state)
+        return self._client.authorize_url(state)
 
     async def start_link(self, user_id: uuid.UUID, next_path: str = "/") -> str:
         """Привязка возможна только как явное действие залогиненного пользователя."""
         state = await self._state_store.issue(
             OAuthState(
-                provider=PROVIDER,
+                provider=self._provider,
                 purpose="link",
                 user_id=str(user_id),
                 next_path=next_path,
             ),
         )
-        return self._github.authorize_url(state)
+        return self._client.authorize_url(state)
 
     async def complete_callback(self, code: str, state_token: str) -> AuthResult:
         state = await self._state_store.consume(state_token)
-        if state is None or state.provider != PROVIDER:
+        if state is None or state.provider is not self._provider:
             raise OAuthStateError
 
-        profile = await self._github.fetch_profile(await self._github.exchange_code(code))
+        profile = await self._client.fetch_profile(await self._client.exchange_code(code))
         user = (
             await self._link_identity(state, profile)
             if state.purpose == "link"
@@ -103,8 +111,8 @@ class GitHubAuthService:
         await self._session.commit()
         return AuthResult(user=user, tokens=tokens, next_path=state.next_path)
 
-    async def _login_or_register(self, profile: GitHubProfile) -> User:
-        identity = await self._identities.get_by_provider(PROVIDER, profile.provider_id)
+    async def _login_or_register(self, profile: OAuthProfile) -> User:
+        identity = await self._identities.get_by_provider(self._provider, profile.provider_id)
         if identity is not None:
             ensure_active(identity.user)
             self._fill_profile(identity.user, profile)
@@ -122,10 +130,10 @@ class GitHubAuthService:
         user.updated_by = user.id
         self._users.add(user)
         self._add_identity(user, profile)
-        logger.info("registered user via github: %s", user.id)
+        logger.info("registered user via %s: %s", self._provider.value, user.id)
         return user
 
-    async def _link_identity(self, state: OAuthState, profile: GitHubProfile) -> User:
+    async def _link_identity(self, state: OAuthState, profile: OAuthProfile) -> User:
         if state.user_id is None:
             raise OAuthStateError
         user = await self._users.get(uuid.UUID(state.user_id))
@@ -133,23 +141,23 @@ class GitHubAuthService:
             raise NotFoundError("Пользователь не найден")
         ensure_active(user)
 
-        existing = await self._identities.get_by_provider(PROVIDER, profile.provider_id)
+        existing = await self._identities.get_by_provider(self._provider, profile.provider_id)
         if existing is not None:
             if existing.user_id != user.id:
                 raise IdentityAlreadyLinkedError
             return user
-        if await self._identities.get_for_user(user.id, PROVIDER) is not None:
-            raise ConflictError("У пользователя уже привязан аккаунт GitHub")
+        if await self._identities.get_for_user(user.id, self._provider) is not None:
+            raise ConflictError(f"У пользователя уже привязан аккаунт {self._provider.value}")
 
         self._add_identity(user, profile)
         self._fill_profile(user, profile)
         return user
 
-    def _add_identity(self, user: User, profile: GitHubProfile) -> None:
+    def _add_identity(self, user: User, profile: OAuthProfile) -> None:
         self._identities.add(
             UserIdentity(
                 user_id=user.id,
-                provider=PROVIDER,
+                provider=self._provider,
                 provider_id=profile.provider_id,
                 email=profile.email,
                 created_by=user.id,
@@ -169,9 +177,26 @@ class GitHubAuthService:
         raise ConflictError("Не удалось подобрать свободный логин")
 
     @staticmethod
-    def _fill_profile(user: User, profile: GitHubProfile) -> None:
+    def _fill_profile(user: User, profile: OAuthProfile) -> None:
         """Заполняем только пустые поля: правки в админке не затираются логином."""
         user.name = user.name or profile.name
         user.email = user.email or profile.email
         user.avatar_url = profile.avatar_url or user.avatar_url
         user.updated_by = user.id
+
+
+class OAuthRegistry:
+    """Настроенные провайдеры. Без ключей провайдера у приложения просто нет."""
+
+    def __init__(self, services: Sequence[OAuthAuthService]) -> None:
+        self._services = {service.provider: service for service in services}
+
+    def get(self, provider: IdentityProvider) -> OAuthAuthService:
+        service = self._services.get(provider)
+        if service is None:
+            raise NotFoundError(f"Вход через {provider.value} не настроен")
+        return service
+
+    @property
+    def available(self) -> list[IdentityProvider]:
+        return list(self._services)

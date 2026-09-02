@@ -1,7 +1,7 @@
 import pytest
 
 from tests.conftest import AuthEnv
-from tests.test_github_auth import start_login
+from tests.test_oauth_auth import start_login
 from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User

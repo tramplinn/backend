@@ -1,4 +1,4 @@
-STAGING_COMPOSE = docker compose --env-file .env.staging -f docker-compose.staging.yml
+STAGING_COMPOSE = docker compose --env-file .env.runtime -f docker-compose.staging.yml
 
 .PHONY: install up down migrate seed revision lint format typecheck test check run \
 	staging-config staging-build staging-infra staging-migrate staging-up staging-down
@@ -52,7 +52,7 @@ staging-migrate:
 	$(STAGING_COMPOSE) run --rm --no-deps api alembic upgrade head
 
 staging-up:
-	$(STAGING_COMPOSE) up -d --build --wait --wait-timeout 60 api
+	$(STAGING_COMPOSE) up -d --build --wait --wait-timeout 60 api algorithm-worker
 
 staging-down:
 	$(STAGING_COMPOSE) down

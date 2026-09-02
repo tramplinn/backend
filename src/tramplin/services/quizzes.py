@@ -10,7 +10,7 @@ from tramplin.models.enums import ContentStatus, QuestionType
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import apply_changes, mark_created, mark_updated
+from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
 from tramplin.services.lessons import LessonRepositoryPort
 from tramplin.services.modules import ModuleRepositoryPort, next_module_item
 
@@ -74,7 +74,11 @@ class QuizService:
         await self._ensure_lesson_in_module(lesson_id, quiz.module_id)
         if changes.get("status") is ContentStatus.PUBLISHED and not quiz.questions:
             raise InvalidQuizError("Нельзя опубликовать тест без вопросов")
-        apply_changes(quiz, changes, required={"title", "slug", "status"})
+        validate_required_updates(changes, {"title", "slug", "status"})
+        quiz.title = changes.get("title", quiz.title)
+        quiz.slug = changes.get("slug", quiz.slug)
+        quiz.lesson_id = changes.get("lesson_id", quiz.lesson_id)
+        quiz.status = changes.get("status", quiz.status)
         mark_updated(quiz, actor_id)
         await self._transaction.commit()
         return quiz
@@ -137,11 +141,16 @@ class QuizService:
         attachment_ids = changes.pop("attachment_ids", None)
         if attachment_ids is not None:
             question.attachments = await self._resolve_attachments(attachment_ids)
-        apply_changes(
-            question,
+        validate_required_updates(
             changes,
-            required={"position", "prompt_md", "type", "options_json", "answer_json"},
+            {"position", "prompt_md", "type", "options_json", "answer_json"},
         )
+        question.position = changes.get("position", question.position)
+        question.prompt_md = changes.get("prompt_md", question.prompt_md)
+        question.type = changes.get("type", question.type)
+        question.options_json = changes.get("options_json", question.options_json)
+        question.answer_json = changes.get("answer_json", question.answer_json)
+        question.explain_md = changes.get("explain_md", question.explain_md)
         mark_updated(question, actor_id)
         await self._transaction.commit()
         return question

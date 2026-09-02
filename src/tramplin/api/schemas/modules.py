@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from tramplin.api.schemas.base import ApiModel
 from tramplin.api.schemas.lessons import LessonOut
 from tramplin.api.schemas.quizzes import QuizOut
-from tramplin.models.enums import ContentStatus
+from tramplin.models.enums import ContentStatus, PracticeMode
 
 
 class ModuleCreate(ApiModel):
@@ -67,8 +67,22 @@ class QuizModuleItemOut(ModuleContentItem):
     quiz: QuizOut
 
 
+class PracticeSetModuleSummary(ApiModel):
+    id: uuid.UUID
+    title: str
+    description: str
+    mode: PracticeMode
+    duration_minutes: int | None
+    status: ContentStatus
+
+
+class PracticeModuleItemOut(ModuleContentItem):
+    kind: Literal["practice"] = "practice"
+    practice_set: PracticeSetModuleSummary
+
+
 ModuleContentItemOut = Annotated[
-    LessonModuleItemOut | QuizModuleItemOut,
+    LessonModuleItemOut | QuizModuleItemOut | PracticeModuleItemOut,
     Field(discriminator="kind"),
 ]
 

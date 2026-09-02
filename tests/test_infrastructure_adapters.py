@@ -5,22 +5,20 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from botocore.exceptions import BotoCoreError
+from pydantic import SecretStr
 
+from tests.conftest import TEST_SECRET
 from tramplin.core.config import Environment, Settings, _parse_duration, load_settings
 from tramplin.core.errors import OAuthProviderError, StorageError
-from tramplin.infrastructure.github import (
-    GitHubOAuthClient,
-    _as_object,
-    _body,
-    _parse_profile,
-    _text,
-    replace_email,
-)
+from tramplin.infrastructure.github import GitHubOAuthClient, _parse_profile, replace_email
+from tramplin.infrastructure.oauth_http import as_object, body
+from tramplin.infrastructure.oauth_http import text as text_or_none
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.redis_store import RedisNamespace, _decode
 from tramplin.infrastructure.s3_storage import S3Storage
+from tramplin.infrastructure.yandex import YandexOAuthClient
 from tramplin.models.enums import AssetMime, IdentityProvider
-from tramplin.services.contracts import GitHubProfile, OAuthState
+from tramplin.services.contracts import OAuthProfile, OAuthState
 
 
 def response(status: int, payload: Any = None, *, text: str | None = None) -> httpx.Response:
@@ -67,24 +65,91 @@ async def test_github_client_success_and_email_fallback(settings: Settings) -> N
     assert (await client.fetch_profile("token")).email is None
 
 
-def test_github_response_validation() -> None:
-    profile = GitHubProfile("1", "user", None, None, None)
+def test_oauth_response_validation() -> None:
+    profile = OAuthProfile("1", "user", None, None, None)
     assert replace_email(profile, "mail@example.test").email == "mail@example.test"
     assert _parse_profile({"id": 1, "login": "user"}).provider_id == "1"
-    assert _text(1) is None
-    assert _text("") is None
-    assert _text("ok") == "ok"
-    assert _as_object({"ok": True}) == {"ok": True}
+    assert text_or_none(1) is None
+    assert text_or_none("") is None
+    assert text_or_none("ok") == "ok"
+    assert as_object({"ok": True}, "GitHub") == {"ok": True}
 
     with pytest.raises(OAuthProviderError):
         _parse_profile({"login": "user"})
     with pytest.raises(OAuthProviderError):
-        _as_object([])
+        as_object([], "GitHub")
     with pytest.raises(OAuthProviderError):
-        _body(response(500, {}))
+        body(response(500, {}), "GitHub")
     with pytest.raises(OAuthProviderError):
-        _body(response(200, text="not-json"))
-    assert _body(response(200, text="not-json"), strict=False) is None
+        body(response(200, text="not-json"), "GitHub")
+    assert body(response(200, text="not-json"), "GitHub", strict=False) is None
+
+
+def yandex_settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        jwt_secret=TEST_SECRET,
+        github_client_id="cid",
+        github_client_secret=SecretStr("csecret"),
+        yandex_client_id="ycid",
+        yandex_client_secret=SecretStr("ysecret"),
+    )
+
+
+async def test_yandex_client_reads_profile_and_builds_avatar_url() -> None:
+    http = cast(Any, type("HttpFake", (), {"post": AsyncMock(), "get": AsyncMock()})())
+    client = YandexOAuthClient(yandex_settings(), http)
+    assert "state=state" in client.authorize_url("state")
+    assert "response_type=code" in client.authorize_url("state")
+
+    http.post.return_value = response(200, {"access_token": "token"})
+    assert await client.exchange_code("code") == "token"
+
+    http.get.return_value = response(
+        200,
+        {
+            "id": "1130000",
+            "login": "student",
+            "display_name": "Студент",
+            "default_email": "student@yandex.ru",
+            "is_avatar_empty": False,
+            "default_avatar_id": "abc",
+        },
+    )
+    profile = await client.fetch_profile("token")
+
+    assert profile.provider_id == "1130000"
+    assert profile.email == "student@yandex.ru"
+    assert profile.name == "Студент"
+    assert profile.avatar_url == "https://avatars.yandex.net/get-yapic/abc/islands-200"
+
+
+async def test_yandex_profile_without_avatar_and_display_name() -> None:
+    http = cast(Any, type("HttpFake", (), {"post": AsyncMock(), "get": AsyncMock()})())
+    client = YandexOAuthClient(yandex_settings(), http)
+
+    http.get.return_value = response(
+        200,
+        {"id": "7", "login": "s", "real_name": "Реальное Имя", "is_avatar_empty": True},
+    )
+    profile = await client.fetch_profile("token")
+
+    assert profile.avatar_url is None
+    assert profile.name == "Реальное Имя"
+    assert profile.email is None
+
+
+async def test_yandex_rejects_profile_without_id_and_missing_token() -> None:
+    http = cast(Any, type("HttpFake", (), {"post": AsyncMock(), "get": AsyncMock()})())
+    client = YandexOAuthClient(yandex_settings(), http)
+
+    http.get.return_value = response(200, {"login": "s"})
+    with pytest.raises(OAuthProviderError, match="id или login"):
+        await client.fetch_profile("token")
+
+    http.post.return_value = response(200, {"error": "invalid_grant"})
+    with pytest.raises(OAuthProviderError, match="access-токен"):
+        await client.exchange_code("bad")
 
 
 async def test_github_exchange_rejects_missing_token(settings: Settings) -> None:

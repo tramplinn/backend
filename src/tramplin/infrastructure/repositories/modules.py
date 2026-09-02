@@ -30,6 +30,7 @@ class ModuleRepository(Repository):
                 .selectinload(ModuleItem.quiz)
                 .selectinload(Quiz.questions)
                 .selectinload(QuizQuestion.attachments),
+                selectinload(Module.items).selectinload(ModuleItem.practice_set),
             )
         )
         return (await self._session.scalars(stmt)).one_or_none()

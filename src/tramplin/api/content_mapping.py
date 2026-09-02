@@ -1,7 +1,13 @@
 from tramplin.api.schemas.assets import AssetOut
 from tramplin.api.schemas.courses import CourseOut, CourseTreeOut
 from tramplin.api.schemas.lessons import LessonOut
-from tramplin.api.schemas.modules import LessonModuleItemOut, ModuleTreeOut, QuizModuleItemOut
+from tramplin.api.schemas.modules import (
+    LessonModuleItemOut,
+    ModuleTreeOut,
+    PracticeModuleItemOut,
+    PracticeSetModuleSummary,
+    QuizModuleItemOut,
+)
 from tramplin.api.schemas.quizzes import (
     QuizAuthorOut,
     QuizOut,
@@ -43,6 +49,12 @@ def track_out(track: Track, *, published_only: bool, asset_base_url: str) -> Tra
         slug=track.slug,
         description=track.description,
         color=track.color,
+        cover_asset_id=track.cover_asset_id,
+        cover_url=(
+            f"{asset_base_url}/{track.cover_asset.s3_key}"
+            if track.cover_asset is not None
+            else None
+        ),
         status=track.status,
         courses=[
             TrackCourseOut(
@@ -127,7 +139,7 @@ def module_tree_out(
     published_only: bool,
     asset_base_url: str,
 ) -> ModuleTreeOut:
-    items: list[LessonModuleItemOut | QuizModuleItemOut] = []
+    items: list[LessonModuleItemOut | QuizModuleItemOut | PracticeModuleItemOut] = []
     published_lesson_ids = {
         item.lesson.id
         for item in module.items
@@ -158,6 +170,16 @@ def module_tree_out(
                     id=item.id,
                     position=item.position,
                     quiz=quiz_out(item.quiz, asset_base_url=asset_base_url),
+                )
+            )
+        elif item.practice_set is not None:
+            if published_only and item.practice_set.status is not ContentStatus.PUBLISHED:
+                continue
+            items.append(
+                PracticeModuleItemOut(
+                    id=item.id,
+                    position=item.position,
+                    practice_set=PracticeSetModuleSummary.model_validate(item.practice_set),
                 )
             )
     return ModuleTreeOut(

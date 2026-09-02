@@ -6,7 +6,7 @@ from typing import Final, Protocol
 import uuid_utils.compat as uuid
 
 from tramplin.core.config import Settings
-from tramplin.core.errors import NotFoundError, StorageError, UnprocessableError
+from tramplin.core.errors import InvalidUpdateError, NotFoundError, StorageError, UnprocessableError
 from tramplin.models.assets import Asset
 from tramplin.models.enums import AssetMime
 from tramplin.services.contracts import PageResult, Transaction
@@ -27,6 +27,23 @@ class AssetRepositoryPort(Protocol):
     def add(self, asset: Asset) -> Asset: ...
 
     async def delete(self, asset: Asset) -> None: ...
+
+
+async def resolve_image_asset(
+    assets: AssetRepositoryPort,
+    asset_id: uuid.UUID | None,
+    *,
+    owner: str,
+) -> Asset | None:
+    """Resolve an optional image reference shared by cover-bearing entities."""
+    if asset_id is None:
+        return None
+    asset = await assets.get(asset_id)
+    if asset is None:
+        raise NotFoundError("Файл обложки не найден")
+    if asset.mime is AssetMime.PDF:
+        raise InvalidUpdateError(f"Обложкой {owner} может быть только изображение")
+    return asset
 
 
 class AssetStoragePort(Protocol):

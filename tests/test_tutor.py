@@ -1,6 +1,10 @@
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncGenerator, AsyncIterator
+from types import SimpleNamespace
 from typing import Any
 
+import httpx2
+import openai
 import pytest
 import uuid_utils.compat as uuid
 from pydantic import SecretStr
@@ -328,3 +332,123 @@ async def test_route_stream_closes_with_done() -> None:
     ]
 
     assert events[-1] == 'data: {"done": true}\n\n'
+
+
+class FakeProviderStream:
+    """Ответ провайдера: отдаёт куски, а затем, если задано, падает."""
+
+    def __init__(self, deltas: list[str], error: Exception | None) -> None:
+        self._deltas = deltas
+        self._error = error
+
+    async def __aenter__(self) -> FakeProviderStream:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> bool:
+        return False
+
+    async def __aiter__(self) -> AsyncIterator[Any]:
+        for delta in self._deltas:
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=delta))])
+        if self._error is not None:
+            raise self._error
+
+
+class FakeCompletions:
+    def __init__(self, answers: list[tuple[list[str], Exception | None]]) -> None:
+        self._answers = answers
+        self.models: list[str] = []
+
+    async def create(self, **kwargs: Any) -> FakeProviderStream:
+        model = kwargs["model"]
+        self.models.append(model)
+        deltas, error = self._answers[len(self.models) - 1]
+        return FakeProviderStream(deltas, error)
+
+
+def make_client(
+    answers: list[tuple[list[str], Exception | None]],
+    **overrides: Any,
+) -> tuple[LlmClient, FakeCompletions]:
+    settings = make_settings(llm_model="primary", llm_api_key=SecretStr("k"), **overrides)
+    client = LlmClient(settings)
+    completions = FakeCompletions(answers)
+    client._client = SimpleNamespace(chat=SimpleNamespace(completions=completions))  # type: ignore[assignment]  # подменяем SDK целиком
+    return client, completions
+
+
+def overloaded() -> openai.APIError:
+    # httpx2 — тот httpx, на котором собран openai; свой httpx у нас другой мажор.
+    return openai.APIError(
+        "Upstream error from Nvidia: Service temporarily overloaded",
+        httpx2.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        body=None,
+    )
+
+
+def ask() -> ChatPrompt:
+    return ChatPrompt(system="s", turns=[ChatTurn(role="user", content="q")])
+
+
+async def test_stream_falls_back_to_next_model_when_provider_fails_before_first_token() -> None:
+    client, completions = make_client(
+        [([], overloaded()), (["ответ"], None)],
+        llm_fallback_models="spare",
+    )
+
+    assert [delta async for delta in client.stream(ask())] == ["ответ"]
+    assert completions.models == ["primary", "spare"]
+
+
+async def test_stream_retries_the_only_model_when_no_fallback_configured() -> None:
+    client, completions = make_client([([], overloaded()), (["ответ"], None)])
+
+    assert [delta async for delta in client.stream(ask())] == ["ответ"]
+    assert completions.models == ["primary", "primary"]
+
+
+async def test_stream_does_not_restart_after_answer_started() -> None:
+    client, completions = make_client(
+        [(["нача"], overloaded()), (["ответ"], None)],
+        llm_fallback_models="spare",
+    )
+
+    stream = client.stream(ask())
+    assert await anext(stream) == "нача"
+    with pytest.raises(ServiceUnavailableError):
+        await anext(stream)
+    assert completions.models == ["primary"]
+
+
+async def test_stream_gives_up_when_every_candidate_fails() -> None:
+    client, completions = make_client(
+        [([], overloaded()), ([], overloaded())],
+        llm_fallback_models="spare",
+    )
+
+    with pytest.raises(ServiceUnavailableError):
+        async for _ in client.stream(ask()):
+            pass
+    assert completions.models == ["primary", "spare"]
+
+
+async def test_heartbeat_fills_a_pause_and_keeps_the_events() -> None:
+    from tramplin.api.v1.tutor import _HEARTBEAT, _with_heartbeat
+
+    async def slow() -> AsyncGenerator[str]:
+        await asyncio.sleep(0.05)
+        yield "data: 1\n\n"
+
+    events = [event async for event in _with_heartbeat(slow(), 0.01)]
+
+    assert events[-1] == "data: 1\n\n"
+    assert events.count(_HEARTBEAT) >= 1
+
+
+async def test_heartbeat_is_silent_when_the_stream_is_quick() -> None:
+    from tramplin.api.v1.tutor import _with_heartbeat
+
+    async def quick() -> AsyncGenerator[str]:
+        yield "data: 1\n\n"
+
+    assert [event async for event in _with_heartbeat(quick(), 5)] == ["data: 1\n\n"]

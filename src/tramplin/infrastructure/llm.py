@@ -58,6 +58,18 @@ class LlmClient:
         if self._http_client is not None:
             await self._http_client.aclose()
 
+    def _attempts(self) -> list[str]:
+        """Каждый кандидат пробуем хотя бы раз, одинокую модель — ещё и повторно."""
+        candidates = [self._settings.llm_model, *self._settings.llm_fallbacks]
+        total = max(len(candidates), self._settings.llm_stream_retries + 1)
+        return [candidates[index % len(candidates)] for index in range(total)]
+
+    def _log(self, model: str, error: openai.APIError) -> None:
+        if isinstance(error, openai.APIStatusError):
+            logger.warning("Модель %s: провайдер ответил %s", model, error.status_code)
+        else:
+            logger.warning("Модель %s: %s — %s", model, type(error).__name__, error.message)
+
     async def stream(self, prompt: ChatPrompt) -> AsyncIterator[str]:
         if not self._settings.llm_enabled:
             raise ServiceUnavailableError("Ассистент не настроен")
@@ -67,26 +79,27 @@ class LlmClient:
             *(_as_param(turn) for turn in prompt.turns),
         ]
 
-        try:
-            # async with обязателен: без него соединение к провайдеру висит
-            # в пуле до сборщика мусора.
-            async with await self._client.chat.completions.create(
-                model=self._settings.llm_model,
-                messages=messages,
-                max_tokens=self._settings.llm_max_tokens,
-                temperature=self._settings.llm_temperature,
-                stream=True,
-            ) as stream:
-                async for chunk in stream:
-                    if not chunk.choices:
-                        continue
-                    delta = chunk.choices[0].delta.content
-                    if delta:
-                        yield delta
-        except openai.APIStatusError as error:
-            # Тело ответа не логируем: в нём может быть ключ.
-            logger.warning("Провайдер модели ответил %s", error.status_code)
-            raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
-        except openai.APIError as error:
-            logger.warning("Ошибка обращения к модели: %s", type(error).__name__)
-            raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
+        attempts = self._attempts()
+        for index, model in enumerate(attempts):
+            started = False
+            try:
+                async with await self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=self._settings.llm_max_tokens,
+                    temperature=self._settings.llm_temperature,
+                    stream=True,
+                ) as stream:
+                    async for chunk in stream:
+                        if not chunk.choices:
+                            continue
+                        delta = chunk.choices[0].delta.content
+                        if delta:
+                            started = True
+                            yield delta
+            except openai.APIError as error:
+                self._log(model, error)
+                if started or index == len(attempts) - 1:
+                    raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
+                continue
+            return

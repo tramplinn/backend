@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, Mock
 
 from tramplin.core.time import utc_now
 from tramplin.infrastructure.repositories import (
+    AlgorithmRepository,
     AssetRepository,
     CourseRepository,
-    GroupRepository,
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
@@ -15,6 +15,17 @@ from tramplin.infrastructure.repositories import (
     TrackRepository,
     UserIdentityRepository,
     UserRepository,
+)
+from tramplin.models.algorithms import (
+    AlgorithmJobOutbox,
+    AlgorithmProblem,
+    AlgorithmProgress,
+    AlgorithmSubmission,
+    AlgorithmTemplate,
+    AlgorithmTestCase,
+    PracticeSession,
+    PracticeSet,
+    PracticeSetProblem,
 )
 from tramplin.models.assets import Asset
 from tramplin.models.base import new_id
@@ -27,10 +38,24 @@ from tramplin.models.content import (
     Track,
     TrackCourse,
 )
-from tramplin.models.enums import AssetMime, ContentStatus, IdentityProvider, QuestionType, UserRole
+from tramplin.models.enums import (
+    AlgorithmDifficulty,
+    AlgorithmProgressStatus,
+    AlgorithmProvider,
+    AlgorithmVerdict,
+    AssetMime,
+    ContentStatus,
+    IdentityProvider,
+    PracticeMode,
+    PracticeSessionStatus,
+    QuestionType,
+    SubmissionKind,
+    SubmissionStatus,
+    UserRole,
+)
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
-from tramplin.models.users import RefreshToken, StudentGroup, User, UserIdentity
+from tramplin.models.users import RefreshToken, User, UserIdentity
 
 
 class ScalarResultFake:
@@ -87,14 +112,6 @@ async def test_asset_course_and_group_repositories() -> None:
     assert await courses.get_by_slug("course", published_only=False) is course
     assert courses.add(course) is course
     await courses.delete(course)
-
-    group = StudentGroup(name="G", year=2026)
-    group_session = session_with(group)
-    groups = GroupRepository(group_session)
-    assert await groups.list() == [group]
-    assert await groups.get(group.id) is group
-    assert groups.add(group) is group
-    await groups.delete(group)
 
 
 async def test_identity_learning_and_token_repositories() -> None:
@@ -195,6 +212,153 @@ async def test_content_repositories() -> None:
     await quizzes.delete_question(question)
 
 
+async def test_algorithm_repository_queries_and_mutations() -> None:
+    user_id = new_id()
+    problem = AlgorithmProblem(
+        provider=AlgorithmProvider.INTERNAL,
+        external_key=None,
+        external_url=None,
+        title="Problem",
+        statement_md="S",
+        statement_html="<p>S</p>",
+        difficulty=AlgorithmDifficulty.EASY,
+        topics=[],
+        time_limit_ms=1000,
+        memory_limit_kb=262144,
+        status=ContentStatus.PUBLISHED,
+    )
+    case = AlgorithmTestCase(
+        problem_id=problem.id,
+        position=0,
+        input="",
+        expected_output="ok",
+        is_sample=True,
+        weight=1,
+    )
+    template = AlgorithmTemplate(
+        problem_id=problem.id,
+        language="python",
+        starter_code="",
+        solution_code="print('ok')",
+        validated_at=utc_now(),
+    )
+    practice_set = PracticeSet(
+        title="Set",
+        description="",
+        mode=PracticeMode.PRACTICE,
+        duration_minutes=None,
+        status=ContentStatus.PUBLISHED,
+    )
+    link = PracticeSetProblem(
+        practice_set_id=practice_set.id,
+        problem_id=problem.id,
+        position=0,
+        recommended_minutes=None,
+    )
+    practice_session = PracticeSession(
+        practice_set_id=practice_set.id,
+        user_id=user_id,
+        mode=PracticeMode.PRACTICE,
+        status=PracticeSessionStatus.ACTIVE,
+        started_at=utc_now(),
+        deadline_at=None,
+        completed_at=None,
+        reflection_md=None,
+    )
+    submission = AlgorithmSubmission(
+        session_id=practice_session.id,
+        problem_id=problem.id,
+        user_id=user_id,
+        kind=SubmissionKind.SUBMIT,
+        language="python",
+        source_code="x",
+        custom_input=None,
+        status=SubmissionStatus.QUEUED,
+        verdict=AlgorithmVerdict.ACCEPTED,
+        runtime_ms=None,
+        memory_kb=None,
+        failed_test=None,
+        stdout=None,
+        stderr=None,
+        safe_error=None,
+        judge_token=None,
+        result_json=None,
+        claimed_at=None,
+        finished_at=None,
+        progress_counted=False,
+    )
+    progress = AlgorithmProgress(
+        user_id=user_id,
+        problem_id=problem.id,
+        status=AlgorithmProgressStatus.UNSEEN,
+        attempts=0,
+        hints_used=0,
+        first_solved_at=None,
+        last_attempt_at=None,
+        confidence=None,
+        complexity_md=None,
+        reflection_md=None,
+        last_counted_submission_id=None,
+    )
+    event = AlgorithmJobOutbox(
+        submission_id=submission.id,
+        dispatched_at=None,
+        attempts=0,
+        last_error=None,
+    )
+    session = session_with(problem, total=1)
+    repository = AlgorithmRepository(session)
+
+    assert await repository.get_problem(problem.id, published_only=True) is problem
+    assert await repository.get_problem(problem.id, published_only=False) is problem
+    assert repository.add_problem(problem) is problem
+    await repository.delete_problem(problem)
+    session.get.side_effect = [case, template, link]
+    assert await repository.get_test_case(case.id) is case
+    assert repository.add_test_case(case) is case
+    await repository.delete_test_case(case)
+    assert await repository.get_template(problem.id, "python") is template
+    assert repository.add_template(template) is template
+    await repository.delete_template(template)
+
+    session.scalars.return_value = ScalarResultFake([practice_set])
+    assert await repository.get_set(practice_set.id, published_only=True) is practice_set
+    assert await repository.get_set(practice_set.id, published_only=False) is practice_set
+    assert repository.add_set(practice_set) is practice_set
+    await repository.delete_set(practice_set)
+    assert repository.add_set_problem(link) is link
+    await repository.delete_set_problem(link)
+    assert await repository.get_set_problem(practice_set.id, problem.id) is link
+
+    assert repository.add_session(practice_session) is practice_session
+    session.scalars.return_value = ScalarResultFake([practice_session])
+    assert await repository.get_session(practice_session.id) is practice_session
+    assert await repository.get_session(practice_session.id, for_update=True) is practice_session
+    await repository.lock_user(user_id)
+    assert repository.add_submission(submission) is submission
+    assert repository.add_outbox(event) is event
+    session.scalars.return_value = ScalarResultFake([event])
+    assert await repository.claim_outbox() is event
+    session.scalars.return_value = ScalarResultFake([submission])
+    assert await repository.get_submission(submission.id) is submission
+    assert await repository.get_submission(submission.id, for_update=True) is submission
+    assert await repository.active_submissions(user_id) == 1
+    assert (
+        await repository.submission_count(
+            user_id=user_id,
+            since=utc_now(),
+            session_id=practice_session.id,
+            problem_id=problem.id,
+        )
+        == 1
+    )
+    assert await repository.claim_submission(stale_before=utc_now()) is submission
+    session.scalars.return_value = ScalarResultFake([progress])
+    assert await repository.get_progress(user_id, problem.id) is progress
+    assert await repository.get_progress(user_id, problem.id, for_update=True) is progress
+    assert repository.add_progress(progress) is progress
+
+
 async def test_track_and_user_repositories() -> None:
     track = Track(title="Track", slug="track")
     course = Course(title="Course", slug="course")
@@ -224,7 +388,6 @@ async def test_track_and_user_repositories() -> None:
     assert await users.list(
         query="u",
         role=UserRole.STUDENT,
-        group_id=new_id(),
         is_active=True,
         limit=10,
         offset=0,

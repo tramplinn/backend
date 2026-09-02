@@ -48,6 +48,10 @@ class Settings(DatabaseSettings):
     github_client_id: str
     github_client_secret: SecretStr
     github_redirect_uri: str = f"http://localhost:8000{API_PREFIX}/auth/github/callback"
+    # Провайдер без client_id просто не появляется в приложении.
+    yandex_client_id: str = ""
+    yandex_client_secret: SecretStr = SecretStr("")
+    yandex_redirect_uri: str = f"http://localhost:8000{API_PREFIX}/auth/yandex/callback"
     oauth_state_ttl: Duration = timedelta(minutes=10)
     oauth_state_bytes: int = 32
     http_timeout: Duration = timedelta(seconds=10)
@@ -60,12 +64,14 @@ class Settings(DatabaseSettings):
     llm_temperature: float = 0.2
     llm_timeout: Duration = timedelta(seconds=90)
     llm_retries: int = 1
+    llm_fallback_models: str = ""
+    llm_stream_retries: int = 1
+    llm_heartbeat: Duration = timedelta(seconds=15)
     llm_history_limit: int = 10
     llm_question_max_chars: int = 2000
     llm_daily_quota: int = 50
     llm_guest_quota: int = 3
     llm_guest_ip_quota: int = 60
-    # Единственный лимит, который нельзя обойти со стороны клиента.
     llm_guest_daily_total: int = 300
     guest_cookie_ttl: Duration = timedelta(days=30)
 
@@ -76,6 +82,24 @@ class Settings(DatabaseSettings):
     s3_endpoint_url: str | None = None
     s3_public_url: str | None = None
     asset_max_bytes: int = 10 * 1024 * 1024
+
+    judge0_url: str = "http://localhost:2358"
+    judge0_auth_token: SecretStr = SecretStr("")
+    algorithm_source_max_bytes: int = 100 * 1024
+    algorithm_output_max_bytes: int = 64 * 1024
+    algorithm_runs_per_hour: int = 60
+    algorithm_runs_per_session_problem: int = 30
+    algorithm_job_timeout: Duration = timedelta(seconds=30)
+    rabbitmq_url: str = "amqp://tramplin:tramplin@localhost:5672/"
+    algorithm_queue_name: str = "algorithm-jobs"
+
+    @property
+    def yandex_enabled(self) -> bool:
+        return bool(self.yandex_client_id and self.yandex_client_secret.get_secret_value())
+
+    @property
+    def llm_fallbacks(self) -> list[str]:
+        return [model.strip() for model in self.llm_fallback_models.split(",") if model.strip()]
 
     @property
     def llm_enabled(self) -> bool:

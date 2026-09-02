@@ -26,7 +26,7 @@ from tramplin.models.content import (
 from tramplin.models.enums import AssetMime, ContentStatus, QuestionType, UserRole
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
-from tramplin.models.users import StudentGroup, User
+from tramplin.models.users import User
 from tramplin.services.lesson_markdown import render_lesson_content
 
 DEMO_COURSE_SLUG = "demo-fullstack"
@@ -206,7 +206,6 @@ async def get_or_create_user(
     role: UserRole,
     name: str,
     actor_id: uuid.UUID | None = None,
-    group_id: uuid.UUID | None = None,
 ) -> User:
     user = await session.scalar(select(User).where(User.login == login))
     if user is None:
@@ -215,34 +214,16 @@ async def get_or_create_user(
             name=name,
             role=role,
             is_active=True,
-            group_id=group_id,
         )
         session.add(user)
         await session.flush()
     user.name = name
     user.role = role
     user.is_active = True
-    user.group_id = group_id
     audit_id = actor_id or user.id
     user.created_by = user.created_by or audit_id
     user.updated_by = audit_id
     return user
-
-
-async def get_or_create_group(session: AsyncSession, actor_id: uuid.UUID) -> StudentGroup:
-    group = await session.scalar(
-        select(StudentGroup).where(StudentGroup.name == "ИСП-21", StudentGroup.year == 2026)
-    )
-    if group is None:
-        group = StudentGroup(
-            name="ИСП-21",
-            year=2026,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        session.add(group)
-        await session.flush()
-    return group
 
 
 def lesson(
@@ -682,7 +663,6 @@ async def seed(settings: Settings) -> dict[str, User]:
                 role=UserRole.ADMIN,
                 name="Demo Admin",
             )
-            group = await get_or_create_group(session, admin.id)
             teacher = await get_or_create_user(
                 session,
                 login="demo-teacher",
@@ -696,7 +676,6 @@ async def seed(settings: Settings) -> dict[str, User]:
                 role=UserRole.STUDENT,
                 name="Demo Student",
                 actor_id=admin.id,
-                group_id=group.id,
             )
             for number in range(2, 6):
                 await get_or_create_user(
@@ -705,7 +684,6 @@ async def seed(settings: Settings) -> dict[str, User]:
                     role=UserRole.STUDENT,
                     name=f"Demo Student {number}",
                     actor_id=admin.id,
-                    group_id=group.id,
                 )
             course = await get_or_create_course(session, teacher.id)
             await expand_demo_course(session, course, teacher.id)

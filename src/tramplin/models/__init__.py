@@ -1,3 +1,14 @@
+from tramplin.models.algorithms import (
+    AlgorithmJobOutbox,
+    AlgorithmProblem,
+    AlgorithmProgress,
+    AlgorithmSubmission,
+    AlgorithmTemplate,
+    AlgorithmTestCase,
+    PracticeSession,
+    PracticeSet,
+    PracticeSetProblem,
+)
 from tramplin.models.assets import Asset
 from tramplin.models.base import Base
 from tramplin.models.content import (
@@ -18,9 +29,15 @@ from tramplin.models.enums import (
 )
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
-from tramplin.models.users import RefreshToken, StudentGroup, User, UserIdentity
+from tramplin.models.users import RefreshToken, User, UserIdentity
 
 __all__ = [
+    "AlgorithmJobOutbox",
+    "AlgorithmProblem",
+    "AlgorithmProgress",
+    "AlgorithmSubmission",
+    "AlgorithmTemplate",
+    "AlgorithmTestCase",
     "Asset",
     "AssetMime",
     "Base",
@@ -32,12 +49,14 @@ __all__ = [
     "LessonProgress",
     "Module",
     "ModuleDep",
+    "PracticeSession",
+    "PracticeSet",
+    "PracticeSetProblem",
     "QuestionType",
     "Quiz",
     "QuizAttempt",
     "QuizQuestion",
     "RefreshToken",
-    "StudentGroup",
     "Track",
     "TrackCourse",
     "User",

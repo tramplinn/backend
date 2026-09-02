@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from tramplin.api.v1.admin import router as admin_router
+from tramplin.api.v1.algorithms import router as algorithms_router
 from tramplin.api.v1.assets import router as assets_router
 from tramplin.api.v1.auth import router as auth_router
 from tramplin.api.v1.authoring import router as authoring_router
@@ -18,5 +19,6 @@ api_router.include_router(authoring_router)
 api_router.include_router(admin_router)
 api_router.include_router(assets_router)
 api_router.include_router(tutor_router)
+api_router.include_router(algorithms_router)
 
 __all__ = ["api_router"]

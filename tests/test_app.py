@@ -43,8 +43,9 @@ async def test_me_with_garbage_token_returns_invalid_token(client: httpx.AsyncCl
 async def test_openapi_exposes_auth_routes(settings: Settings) -> None:
     schema = create_app(settings).openapi()
 
-    assert "/api/v1/auth/github/login" in schema["paths"]
-    assert "/api/v1/auth/github/callback" in schema["paths"]
+    assert "/api/v1/auth/{provider}/login" in schema["paths"]
+    assert "/api/v1/auth/{provider}/callback" in schema["paths"]
+    assert "/api/v1/auth/providers" in schema["paths"]
     assert "/api/v1/auth/refresh" in schema["paths"]
     assert "/api/v1/courses" in schema["paths"]
     assert "/api/v1/courses/{slug}" in schema["paths"]
@@ -64,15 +65,13 @@ async def test_openapi_exposes_auth_routes(settings: Settings) -> None:
     assert "/api/v1/authoring/tracks/{track_id}/courses/{course_id}" in schema["paths"]
     assert "/api/v1/authoring/markdown/preview" in schema["paths"]
     assert "/api/v1/admin/users" in schema["paths"]
-    assert "/api/v1/admin/groups" in schema["paths"]
     assert "/api/v1/assets" in schema["paths"]
-    assert "/api/v1/admin/groups/{group_id}" in schema["paths"]
+    assert "/api/v1/admin/groups" not in schema["paths"]
 
     user_parameters = schema["paths"]["/api/v1/admin/users"]["get"]["parameters"]
     assert {parameter["name"] for parameter in user_parameters} >= {
         "q",
         "role",
-        "group_id",
         "is_active",
         "limit",
         "offset",

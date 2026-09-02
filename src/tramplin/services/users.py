@@ -6,7 +6,6 @@ from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError, U
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import PageResult, Transaction
-from tramplin.services.groups import GroupRepositoryPort
 
 
 class UserRepositoryPort(Protocol):
@@ -15,7 +14,6 @@ class UserRepositoryPort(Protocol):
         *,
         query: str | None,
         role: UserRole | None,
-        group_id: uuid.UUID | None,
         is_active: bool | None,
         limit: int,
         offset: int,
@@ -74,19 +72,16 @@ class UserService:
         session: Transaction,
         users: UserRepositoryPort,
         identities: UserIdentityRepositoryPort,
-        groups: GroupRepositoryPort,
     ) -> None:
         self._session = session
         self._users = users
         self._identities = identities
-        self._groups = groups
 
     async def list(
         self,
         *,
         query: str | None = None,
         role: UserRole | None = None,
-        group_id: uuid.UUID | None = None,
         is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
@@ -94,7 +89,6 @@ class UserService:
         items, total = await self._users.list(
             query=query,
             role=role,
-            group_id=group_id,
             is_active=is_active,
             limit=limit,
             offset=offset,
@@ -131,13 +125,14 @@ class UserService:
             or changes.get("role") in {UserRole.STUDENT, UserRole.TEACHER}
         ):
             raise ConflictError("Нельзя отключить себя или снять с себя роль администратора")
-        group_id = changes.get("group_id")
-        if group_id is not None and await self._groups.get(group_id) is None:
-            raise NotFoundError("Учебная группа не найдена")
-        for field, value in changes.items():
-            if field in {"role", "is_active"} and value is None:
-                raise ConflictError(f"Поле {field} не может быть null")
-            setattr(user, field, value)
+        if "role" in changes:
+            if changes["role"] is None:
+                raise ConflictError("Поле role не может быть null")
+            user.role = changes["role"]
+        if "is_active" in changes:
+            if changes["is_active"] is None:
+                raise ConflictError("Поле is_active не может быть null")
+            user.is_active = changes["is_active"]
         user.updated_by = actor_id
         await self._session.commit()
         return user

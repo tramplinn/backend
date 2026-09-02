@@ -24,7 +24,7 @@ def _storage_errors() -> Iterator[None]:
 
 
 class S3Storage:
-    def __init__(self, client: "S3Client", bucket: str, public_base_url: str) -> None:
+    def __init__(self, client: S3Client, bucket: str, public_base_url: str) -> None:
         self._client = client
         self._bucket = bucket
         self._public_base_url = public_base_url

@@ -34,7 +34,7 @@ quiz_question_assets = Table(
 )
 
 
-class Quiz(UUIDPrimaryKey, Base):
+class Quiz(UUIDPrimaryKey):
     """Тест модуля (lesson_id IS NULL) либо конкретного урока внутри этого модуля."""
 
     __tablename__ = "quizzes"
@@ -61,14 +61,14 @@ class Quiz(UUIDPrimaryKey, Base):
         foreign_keys=[lesson_id],
         viewonly=True,
     )
-    questions: Mapped[list["QuizQuestion"]] = relationship(
+    questions: Mapped[list[QuizQuestion]] = relationship(
         back_populates="quiz",
         cascade="all, delete-orphan",
         order_by="QuizQuestion.position",
     )
 
 
-class QuizQuestion(UUIDPrimaryKey, Base):
+class QuizQuestion(UUIDPrimaryKey):
     """answer_json не покидает сервер до отправки ответов: выбираем явным списком колонок."""
 
     __tablename__ = "quiz_questions"
@@ -83,7 +83,7 @@ class QuizQuestion(UUIDPrimaryKey, Base):
     explain_md: Mapped[str | None] = mapped_column(Text())
 
     quiz: Mapped[Quiz] = relationship(back_populates="questions")
-    attachments: Mapped[list["Asset"]] = relationship(secondary=quiz_question_assets)
+    attachments: Mapped[list[Asset]] = relationship(secondary=quiz_question_assets)
 
 
 Index("ix_quizzes_module_id", Quiz.module_id)

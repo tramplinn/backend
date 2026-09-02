@@ -28,7 +28,12 @@ from tramplin.models.content import (
 from tramplin.models.enums import AssetMime, ContentStatus, QuestionType
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.courses import CourseService
-from tramplin.services.entity_updates import apply_changes, mark_created, mark_updated
+from tramplin.services.entity_updates import (
+    apply_order,
+    mark_created,
+    mark_updated,
+    validate_required_updates,
+)
 from tramplin.services.lessons import LessonService
 from tramplin.services.modules import ModuleService
 from tramplin.services.quizzes import QuizService
@@ -97,6 +102,29 @@ async def test_course_cover_must_reference_an_image_asset() -> None:
     assets.get.return_value = pdf
     with pytest.raises(InvalidUpdateError, match="изображение"):
         await service.update(course.id, {"cover_asset_id": pdf.id}, actor)
+
+
+async def test_track_cover_must_reference_an_image_asset() -> None:
+    track = Track(**content_model_kwargs())
+    image = Asset(filename="cover.webp", s3_key="cover", mime=AssetMime.WEBP, size=10)
+    pdf = Asset(filename="book.pdf", s3_key="book", mime=AssetMime.PDF, size=10)
+    repository = dependency(get=AsyncMock(return_value=track))
+    assets = dependency(get=AsyncMock(return_value=image))
+    service = TrackService(FakeSession(), repository, dependency(), assets)
+    actor = new_id()
+
+    result = await service.update(track.id, {"cover_asset_id": image.id}, actor)
+
+    assert result.cover_asset is image
+    assert result.cover_asset_id == image.id
+
+    assets.get.return_value = None
+    with pytest.raises(NotFoundError, match="обложки"):
+        await service.update(track.id, {"cover_asset_id": new_id()}, actor)
+
+    assets.get.return_value = pdf
+    with pytest.raises(InvalidUpdateError, match="изображение"):
+        await service.update(track.id, {"cover_asset_id": pdf.id}, actor)
 
 
 async def test_module_service_crud_dependencies_and_validation() -> None:
@@ -319,7 +347,7 @@ async def test_track_service_crud_attach_and_detach() -> None:
         delete_course_link=AsyncMock(),
     )
     courses = dependency(get=AsyncMock(return_value=course))
-    service = TrackService(session, tracks, courses)
+    service = TrackService(session, tracks, courses, dependency())
     actor = new_id()
 
     assert await service.list(published_only=False) == [track]
@@ -356,13 +384,12 @@ async def test_track_service_crud_attach_and_detach() -> None:
 def test_entity_update_helpers() -> None:
     course = Course(**content_model_kwargs())
     actor = new_id()
-    apply_changes(course, {"title": "Updated"}, required={"title"})
+    validate_required_updates({"title": "Updated"}, {"title"})
     mark_created(course, actor)
     mark_updated(course, actor)
-    assert course.title == "Updated"
     assert course.created_by == actor
     with pytest.raises(InvalidUpdateError):
-        apply_changes(course, {"title": None}, required={"title"})
+        validate_required_updates({"title": None}, {"title"})
 
 
 def test_module_tree_mapping_preserves_one_mixed_order() -> None:
@@ -395,7 +422,7 @@ async def test_track_service_create_loads_courses_collection() -> None:
     greenlet-контекста и создание падает уже после записи в базу."""
     track = Track(**content_model_kwargs())
     tracks = dependency(add=Mock())
-    service = TrackService(FakeSession(), tracks, dependency())
+    service = TrackService(FakeSession(), tracks, dependency(), dependency())
 
     await service.create(track, new_id())
 
@@ -453,6 +480,14 @@ async def test_module_service_reorder_content_rejects_partial_order() -> None:
 
     with pytest.raises(ConflictError):
         await service.reorder_content(module.id, [first.id], new_id())
+
+
+def test_apply_order_rejects_duplicate_ids_even_when_the_set_matches() -> None:
+    module = Module(**content_model_kwargs())
+    item = ModuleItem(module_id=module.id, lesson_id=new_id(), position=0)
+
+    with pytest.raises(ConflictError):
+        apply_order([item], [item.id, item.id], new_id(), subject="материалы")
 
 
 async def test_module_service_reorder_requires_existing_course() -> None:

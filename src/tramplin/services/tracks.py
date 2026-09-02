@@ -5,13 +5,14 @@ import uuid_utils.compat as uuid
 
 from tramplin.core.errors import NotFoundError
 from tramplin.models.content import Track, TrackCourse
+from tramplin.services.assets import AssetRepositoryPort, resolve_image_asset
 from tramplin.services.contracts import Transaction
 from tramplin.services.courses import CourseRepositoryPort
 from tramplin.services.entity_updates import (
-    apply_changes,
     apply_order_by,
     mark_created,
     mark_updated,
+    validate_required_updates,
 )
 
 
@@ -47,10 +48,12 @@ class TrackService:
         transaction: Transaction,
         tracks: TrackRepositoryPort,
         courses: CourseRepositoryPort,
+        assets: AssetRepositoryPort,
     ) -> None:
         self._transaction = transaction
         self._tracks = tracks
         self._courses = courses
+        self._assets = assets
 
     async def list(self, *, published_only: bool = True) -> list[Track]:
         return await self._tracks.list(published_only=published_only)
@@ -65,6 +68,9 @@ class TrackService:
         # Пустую коллекцию задаём явно: иначе после commit обращение к ней
         # уйдёт в ленивую подгрузку вне greenlet-контекста и упадёт.
         track.courses = []
+        track.cover_asset = await resolve_image_asset(
+            self._assets, track.cover_asset_id, owner="трека"
+        )
         mark_created(track, actor_id)
         self._tracks.add(track)
         await self._transaction.commit()
@@ -76,7 +82,18 @@ class TrackService:
         track = await self._tracks.get(track_id)
         if track is None:
             raise NotFoundError("Трек не найден")
-        apply_changes(track, changes, required={"title", "slug", "status"})
+        if "cover_asset_id" in changes:
+            cover_asset_id = changes.pop("cover_asset_id")
+            track.cover_asset = await resolve_image_asset(
+                self._assets, cover_asset_id, owner="трека"
+            )
+            track.cover_asset_id = cover_asset_id
+        validate_required_updates(changes, {"title", "slug", "status"})
+        track.title = changes.get("title", track.title)
+        track.slug = changes.get("slug", track.slug)
+        track.description = changes.get("description", track.description)
+        track.color = changes.get("color", track.color)
+        track.status = changes.get("status", track.status)
         mark_updated(track, actor_id)
         await self._transaction.commit()
         return track

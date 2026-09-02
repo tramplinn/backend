@@ -3,16 +3,23 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-: "${DOCKER_IMAGE_API:?}" "${COMPOSE_PROJECT_NAME:?}"
+if [ "$#" -ne 3 ]; then
+  echo "usage: $0 IMAGE PROJECT REGISTRY" >&2
+  exit 2
+fi
 
-export APP_ENV_FILE=.env.runtime
+image=$1
+project=$2
+registry=$3
+export COMPOSE_PROJECT_NAME=$project
 
-compose() {
-  docker compose --env-file .env.runtime -f docker-compose.staging.yml "$@"
-}
+docker compose --env-file .env.runtime -p "$project" -f docker-compose.staging.yml config --quiet
+docker pull "$image"
+docker tag "$image" tramplin-api:local
+docker compose --env-file .env.runtime -p "$project" -f docker-compose.staging.yml pull --quiet --ignore-buildable
+docker compose --env-file .env.runtime -p "$project" -f docker-compose.staging.yml up -d --wait --wait-timeout 60 postgres redis
+docker compose --env-file .env.runtime -p "$project" -f docker-compose.staging.yml run --rm --no-deps api alembic upgrade head
+docker compose --env-file .env.runtime -p "$project" -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 60 api algorithm-worker
 
-compose config --quiet
-compose pull --quiet
-compose up -d --wait --wait-timeout 60 postgres redis
-compose run --rm --no-deps api alembic upgrade head
-compose up -d --no-build --remove-orphans --wait --wait-timeout 60 api
+docker image prune -f
+docker logout "$registry"

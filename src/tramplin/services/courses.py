@@ -2,13 +2,11 @@ from typing import Any, Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.core.errors import InvalidUpdateError, NotFoundError
-from tramplin.models.assets import Asset
+from tramplin.core.errors import NotFoundError
 from tramplin.models.content import Course
-from tramplin.models.enums import AssetMime
-from tramplin.services.assets import AssetRepositoryPort
+from tramplin.services.assets import AssetRepositoryPort, resolve_image_asset
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import apply_changes, mark_created, mark_updated
+from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
 
 
 class CourseRepositoryPort(Protocol):
@@ -44,7 +42,9 @@ class CourseService:
         return course
 
     async def create(self, course: Course, actor_id: uuid.UUID) -> Course:
-        course.cover_asset = await self._resolve_cover(course.cover_asset_id)
+        course.cover_asset = await resolve_image_asset(
+            self._assets, course.cover_asset_id, owner="курса"
+        )
         mark_created(course, actor_id)
         self._courses.add(course)
         await self._transaction.commit()
@@ -58,9 +58,17 @@ class CourseService:
             raise NotFoundError("Курс не найден")
         if "cover_asset_id" in changes:
             cover_asset_id = changes.pop("cover_asset_id")
-            course.cover_asset = await self._resolve_cover(cover_asset_id)
+            course.cover_asset = await resolve_image_asset(
+                self._assets, cover_asset_id, owner="курса"
+            )
             course.cover_asset_id = cover_asset_id
-        apply_changes(course, changes, required={"title", "slug", "status"})
+        validate_required_updates(changes, {"title", "slug", "status"})
+        course.title = changes.get("title", course.title)
+        course.slug = changes.get("slug", course.slug)
+        course.summary = changes.get("summary", course.summary)
+        course.color = changes.get("color", course.color)
+        course.est_hours = changes.get("est_hours", course.est_hours)
+        course.status = changes.get("status", course.status)
         mark_updated(course, actor_id)
         await self._transaction.commit()
         return course
@@ -71,13 +79,3 @@ class CourseService:
             raise NotFoundError("Курс не найден")
         await self._courses.delete(course)
         await self._transaction.commit()
-
-    async def _resolve_cover(self, asset_id: uuid.UUID | None) -> Asset | None:
-        if asset_id is None:
-            return None
-        asset = await self._assets.get(asset_id)
-        if asset is None:
-            raise NotFoundError("Файл обложки не найден")
-        if asset.mime is AssetMime.PDF:
-            raise InvalidUpdateError("Обложкой курса может быть только изображение")
-        return asset

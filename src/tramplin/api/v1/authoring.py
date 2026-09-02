@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from tramplin.api.v1 import (
+    algorithm_authoring,
     courses,
     lessons,
     modules,
@@ -16,5 +17,6 @@ router.include_router(courses.router)
 router.include_router(modules.router)
 router.include_router(lessons.router)
 router.include_router(quizzes.router)
+router.include_router(algorithm_authoring.router)
 
 __all__ = ["router"]

@@ -14,10 +14,13 @@ from sqlalchemy.ext.asyncio import (
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
 from tramplin.infrastructure.github import GitHubOAuthClient
+from tramplin.infrastructure.judge0 import Judge0CodeRunner
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.s3_storage import S3Storage
 from tramplin.infrastructure.tutor_quota import TutorQuota
+from tramplin.infrastructure.yandex import YandexOAuthClient
+from tramplin.services.contracts import CodeRunner
 
 
 class AppProvider(Provider):
@@ -78,6 +81,18 @@ class AppProvider(Provider):
         client: httpx.AsyncClient,
     ) -> GitHubOAuthClient:
         return GitHubOAuthClient(settings, client)
+
+    @provide
+    def yandex_client(
+        self,
+        settings: Settings,
+        client: httpx.AsyncClient,
+    ) -> YandexOAuthClient:
+        return YandexOAuthClient(settings, client)
+
+    @provide
+    def code_runner(self, client: httpx.AsyncClient, settings: Settings) -> CodeRunner:
+        return Judge0CodeRunner(client, settings)
 
     @provide
     async def storage(self, settings: Settings) -> AsyncIterator[S3Storage]:

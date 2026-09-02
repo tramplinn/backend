@@ -8,9 +8,9 @@ from tramplin.core.security import AccessTokenCodec
 from tramplin.infrastructure.github import GitHubOAuthClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.repositories import (
+    AlgorithmRepository,
     AssetRepository,
     CourseRepository,
-    GroupRepository,
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
@@ -23,12 +23,20 @@ from tramplin.infrastructure.repositories import (
 )
 from tramplin.infrastructure.s3_storage import S3Storage
 from tramplin.infrastructure.tutor_quota import TutorQuota
+from tramplin.infrastructure.yandex import YandexOAuthClient
+from tramplin.models.enums import IdentityProvider
+from tramplin.services.algorithms import (
+    AlgorithmAuthoringService,
+    AlgorithmOperationsService,
+    AlgorithmPracticeService,
+    AlgorithmWorkerService,
+)
 from tramplin.services.assets import AssetService
+from tramplin.services.contracts import CodeRunner
 from tramplin.services.courses import CourseService
-from tramplin.services.github_auth import GitHubAuthService
-from tramplin.services.groups import GroupService
 from tramplin.services.lessons import LessonService
 from tramplin.services.modules import ModuleService
+from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAuthRegistry
 from tramplin.services.progress import ProgressService
 from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
@@ -51,7 +59,6 @@ class RequestProvider(Provider):
             yield session
 
     users = provide(UserRepository)
-    groups = provide(GroupRepository)
     identities = provide(UserIdentityRepository)
     refresh_tokens = provide(RefreshTokenRepository)
     tracks = provide(TrackRepository)
@@ -62,6 +69,7 @@ class RequestProvider(Provider):
     lesson_progress = provide(LessonProgressRepository)
     quiz_attempts = provide(QuizAttemptRepository)
     assets = provide(AssetRepository)
+    algorithms = provide(AlgorithmRepository)
 
     @provide
     def session_service(
@@ -80,21 +88,36 @@ class RequestProvider(Provider):
         session: AsyncSession,
         users: UserRepository,
         identities: UserIdentityRepository,
-        groups: GroupRepository,
     ) -> UserService:
-        return UserService(session, users, identities, groups)
+        return UserService(session, users, identities)
 
     @provide
-    def github_auth_service(
+    def oauth_registry(
         self,
         session: AsyncSession,
         users: UserRepository,
         identities: UserIdentityRepository,
         github: GitHubOAuthClient,
+        yandex: YandexOAuthClient,
         state_store: OAuthStateStore,
         sessions: SessionService,
-    ) -> GitHubAuthService:
-        return GitHubAuthService(session, users, identities, github, state_store, sessions)
+        settings: Settings,
+    ) -> OAuthRegistry:
+        def build(provider: IdentityProvider, client: OAuthClientPort) -> OAuthAuthService:
+            return OAuthAuthService(
+                session,
+                users,
+                identities,
+                provider,
+                client,
+                state_store,
+                sessions,
+            )
+
+        services = [build(IdentityProvider.GITHUB, github)]
+        if settings.yandex_enabled:
+            services.append(build(IdentityProvider.YANDEX, yandex))
+        return OAuthRegistry(services)
 
     @provide
     def track_service(
@@ -102,8 +125,9 @@ class RequestProvider(Provider):
         session: AsyncSession,
         tracks: TrackRepository,
         courses: CourseRepository,
+        assets: AssetRepository,
     ) -> TrackService:
-        return TrackService(session, tracks, courses)
+        return TrackService(session, tracks, courses, assets)
 
     @provide
     def course_service(
@@ -174,14 +198,6 @@ class RequestProvider(Provider):
         return TutorService(lessons, quota, settings)
 
     @provide
-    def group_service(
-        self,
-        session: AsyncSession,
-        groups: GroupRepository,
-    ) -> GroupService:
-        return GroupService(session, groups)
-
-    @provide
     def asset_service(
         self,
         session: AsyncSession,
@@ -190,3 +206,41 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> AssetService:
         return AssetService(session, assets, storage, settings)
+
+    @provide
+    def algorithm_authoring_service(
+        self,
+        session: AsyncSession,
+        algorithms: AlgorithmRepository,
+        modules: ModuleRepository,
+        runner: CodeRunner,
+        settings: Settings,
+    ) -> AlgorithmAuthoringService:
+        return AlgorithmAuthoringService(session, algorithms, modules, runner, settings)
+
+    @provide
+    def algorithm_practice_service(
+        self,
+        session: AsyncSession,
+        algorithms: AlgorithmRepository,
+        settings: Settings,
+    ) -> AlgorithmPracticeService:
+        return AlgorithmPracticeService(session, algorithms, settings)
+
+    @provide
+    def algorithm_worker_service(
+        self,
+        session: AsyncSession,
+        algorithms: AlgorithmRepository,
+        runner: CodeRunner,
+        settings: Settings,
+    ) -> AlgorithmWorkerService:
+        return AlgorithmWorkerService(session, algorithms, runner, settings)
+
+    @provide
+    def algorithm_operations_service(
+        self,
+        algorithms: AlgorithmRepository,
+        runner: CodeRunner,
+    ) -> AlgorithmOperationsService:
+        return AlgorithmOperationsService(algorithms, runner)

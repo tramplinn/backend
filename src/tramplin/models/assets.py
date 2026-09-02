@@ -1,11 +1,11 @@
 from sqlalchemy import BigInteger, CheckConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from tramplin.models.base import Base, UUIDPrimaryKey
+from tramplin.models.base import UUIDPrimaryKey
 from tramplin.models.enums import AssetMime
 
 
-class Asset(UUIDPrimaryKey, Base):
+class Asset(UUIDPrimaryKey):
     __tablename__ = "assets"
     __table_args__ = (CheckConstraint("size > 0", name="size_positive"),)
 

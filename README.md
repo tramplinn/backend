@@ -14,7 +14,7 @@ API учебной платформы Tramplin: курсы и модули, ур
 - GitHub OAuth и собственные access/refresh-сессии;
 - загрузка файлов в S3-совместимое хранилище;
 - потоковый AI-ассистент урока с квотами;
-- управление пользователями и учебными группами.
+- управление пользователями и ролями.
 
 ## Стек
 
@@ -124,9 +124,10 @@ make check
 | Redis        | `REDIS_URL`                                                                                    |
 | JWT          | `JWT_SECRET`, `JWT_ISSUER`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`                            |
 | GitHub OAuth | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`                              |
+| Яндекс ID    | `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `YANDEX_REDIRECT_URI`                              |
 | S3           | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_ENDPOINT_URL`, `S3_PUBLIC_URL` |
 | Файлы        | `ASSET_MAX_BYTES`                                                                              |
-| Ассистент    | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_*_QUOTA`                                      |
+| Ассистент    | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_FALLBACK_MODELS`, `LLM_*_QUOTA`               |
 
 Полный список и значения по умолчанию находятся в `.env.example` и
 `src/tramplin/core/config.py`. Длительности принимаются в секундах (`900`) или
@@ -187,7 +188,7 @@ infrastructure implements contracts
 | `/authoring/*`                                | CRUD контента для teacher/admin                      |
 | `/assets`                                     | загрузка и управление файлами                        |
 | `/tutor/*`                                    | потоковый ассистент урока                            |
-| `/admin/*`                                    | пользователи и группы                                |
+| `/admin/*`                                    | пользователи                                         |
 
 Студенческий API тестов не возвращает правильные ответы. Они доступны только в
 authoring API.
@@ -270,7 +271,7 @@ uv run alembic upgrade head --sql
 ```
 
 `make seed` не очищает базу и безопасен при повторном запуске. Он создаёт demo-курс,
-трек, модули, уроки, тест, пользователей, группу, прогресс и assets. В конце
+трек, модули, уроки, тест, пользователей, прогресс и assets. В конце
 печатаются временные access-токены ролей `student`, `teacher` и `admin`.
 
 ## Docker
@@ -279,7 +280,8 @@ uv run alembic upgrade head --sql
 
 `docker-compose.yml` предназначен только для локальной разработки. `make up`
 поднимает PostgreSQL, Redis, MinIO и создаёт локальный бакет. API обычно запускается
-на хосте через `make run`.
+на хосте через `make run`. RabbitMQ и Judge0 поднимаются общим compose из репозитория
+`infra`; для Judge0 используется профиль `algorithm`.
 
 При необходимости весь локальный набор можно поднять в Docker:
 
@@ -289,22 +291,24 @@ docker compose --profile full up --build
 
 ### Staging с cloud S3
 
-`docker-compose.staging.yml` запускает API, PostgreSQL 17 и Redis 7. База и Redis
-доступны только во внутренней Docker-сети, сохраняют данные в именованных volumes и
-не публикуют порты на хост. MinIO, demo seed и тестовых сервисов в файле нет.
+`docker-compose.staging.yml` запускает API, algorithm worker, PostgreSQL 18 и Redis 8.
+База и Redis доступны только во внутренней Docker-сети, сохраняют данные в именованных
+volumes и не публикуют порты на хост. MinIO, demo seed и тестовых сервисов в файле нет.
 Dockerfile устанавливает зависимости с `--no-dev`, а `.dockerignore` исключает
 `tests/` и `scripts/` из образа.
 
 Создайте staging-конфигурацию:
 
 ```bash
-cp .env.staging.example .env.staging
+cp .env.staging.example .env.runtime
 ```
 
 Сгенерируйте разные URL-safe значения `POSTGRES_PASSWORD` и `REDIS_PASSWORD`,
 например через `openssl rand -hex 32`. Compose сам собирает внутренние `DATABASE_URL`
-и `REDIS_URL`. Также заполните GitHub OAuth и cloud S3. Бакет должен быть создан
-заранее. Для AWS `S3_ENDPOINT_URL` не задаётся; для совместимого провайдера
+и `REDIS_URL`. Укажите выданные infra значения `RABBITMQ_USER`,
+`RABBITMQ_PASSWORD` и `JUDGE0_AUTH_TOKEN`. Также заполните OAuth и cloud S3.
+Бакет должен быть создан заранее.
+Для AWS `S3_ENDPOINT_URL` не задаётся; для совместимого провайдера
 указывается его endpoint. `S3_PUBLIC_URL` может вести на публичный бакет или CDN.
 
 Проверьте конфигурацию, соберите образ, примените миграции и запустите API:
@@ -316,10 +320,10 @@ make staging-migrate
 make staging-up
 ```
 
-По умолчанию порт публикуется на `127.0.0.1:8000` для reverse proxy на том же
-сервере. Привязку можно изменить через `API_BIND_HOST` и `API_PORT`.
+API не публикует порт на хост. Caddy подключается к нему по имени сервиса через
+общую сеть `tramplin-edge`.
 
-`.env.staging` находится в `.gitignore`. Секреты не должны попадать в compose-файл,
+`.env.runtime` находится в `.gitignore`. Секреты не должны попадать в compose-файл,
 Docker image или систему контроля версий. Миграции остаются отдельным явным шагом
 перед запуском новой версии приложения. `make staging-down` останавливает контейнеры,
 но сохраняет volumes PostgreSQL и Redis.
@@ -334,6 +338,7 @@ Deploy-compose создаёт runtime-контейнеры и отдельные
 - отдельные GitHub OAuth Apps или callback URLs для stage и production;
 - регулярный `pg_dump` PostgreSQL во внешнее защищённое хранилище;
 - lifecycle/retention и резервирование данных S3;
+- общий RabbitMQ и профиль Judge0 из репозитория `infra`;
 - мониторинг healthcheck, свободного места, подключений и ошибок приложения.
 
 Redis обязателен: в нём хранятся OAuth state, refresh-сессии и квоты ассистента.
@@ -345,8 +350,8 @@ Redis обязателен: в нём хранятся OAuth state, refresh-се
 работ в production следует перейти на закрытый bucket и короткоживущие presigned
 GET URL — это отдельное изменение storage-контракта.
 
-LLM-провайдер необязателен. On-premise Judge0 понадобится после реализации
-Algorithm Practice и будет отдельным внутренним сервисом, а не частью этого compose.
+LLM-провайдер необязателен. On-premise Judge0 и RabbitMQ являются отдельными
+внутренними сервисами общего `infra` compose, а не частью compose приложения.
 
 ### Почему в docker-файлах именно так
 
@@ -360,7 +365,6 @@ Algorithm Practice и будет отдельным внутренним сер�
 | сеть `edge` объявлена `external` | она общая с пограничным стендом и создаётся репозиторием `infra`, поэтому `infra` выкатывается первым |
 | `pip` и `uv` удаляются из финального образа | приложение запускается из `/app/.venv`, установщик пакетов в рантайме не нужен. Заодно уходят уязвимости вендоренных внутрь pip копий `msgpack` и `setuptools` — своими зависимостями они нам не приходятся, но в скан образа попадали |
 | `read_only: true` и `tmpfs` на `/tmp` у `api` | образу нечего писать на диск, а временные файлы живут в памяти и не переживают перезапуск |
-| якорь `x-service` | `restart`, `logging` и `security_opt` одинаковы у всех сервисов стенда, и держать их в одном месте дешевле, чем следить за тремя копиями |
 
 ### GitLab deploy
 
@@ -372,25 +376,20 @@ Algorithm Practice и будет отдельным внутренним сер�
   файл, а переменная в джобе это путь к нему
 - `STAGE_URL` и `PROD_URL` — адреса сред, по ним же ходит DAST
 
-Скан образа идёт с `--ignore-unfixed`. Debian регулярно отдаёт HIGH и CRITICAL
-со статусами `affected` и `fix_deferred` — то есть исправления не существует ни в
-одном пакете, и красная сборка на них не значит ничего, кроме заглушенного шума.
-Всё, у чего есть исправленная версия, по-прежнему валит сборку, как и раньше;
-скан зависимостей (`trivy-sca`) не ослаблен вовсе.
+Runtime собран на минимальном Alpine-образе. Trivy проверяет зависимости и готовый
+образ без файлов исключений и без подавления неисправленных уязвимостей: любая
+HIGH или CRITICAL находка останавливает pipeline.
 
-Образ получает два тега: подвижный `DOCKER_IMAGE_API` (по ветке) и неизменяемый
-`DOCKER_IMAGE_API_SHA` (по коммиту). Тег по коммиту пушится первым и разворачивается
-на сервер — деплой воспроизводим, а откат это перезапуск старой джобы. Он же
-удерживает слои образа: пока единственной ссылкой на них был подвижный тег, сборка
-перезаписывала его, прошлый манифест повисал, сборщик мусора реестра сносил слои,
-и следующий push падал на `blob unknown to registry`.
+Образ получает один неизменяемый тег по коммиту. Путь строится из встроенных
+переменных GitLab; отдельные переменные для имени образа не нужны. Deploy-скрипт
+скачивает этот образ и присваивает ему технический локальный тег из Compose.
 
 
 Pipeline использует `docker-compose.staging.yml` для stage и production с project
 names `tramplin-stage` и `tramplin-prod`. Поэтому контейнеры и volumes сред не
 пересекаются. В GitLab CI/CD Variables должны находиться `STAGE_ENV` и `PROD_ENV`
-с полным runtime-окружением. Если обе среды работают на одном сервере, задайте им
-разные `API_PORT`.
+с полным runtime-окружением. Обе среды могут работать на одном сервере: наружу API
+не публикуется, а Caddy использует разные сетевые алиасы.
 
 Deploy job копирует на сервер только deploy-compose, `scripts/deploy.sh` и
 защищённый runtime env, открывает сессию реестра и запускает скрипт. Сам скрипт
@@ -402,10 +401,8 @@ Deploy job копирует на сервер только deploy-compose, `scri
 4. отдельным one-shot контейнером применяет Alembic-миграции;
 5. запускает API без локальной сборки и ждёт успешный healthcheck.
 
-Сессию реестра и уборку образов на хосте держит на себе CI, а не скрипт: логин и
-логаут парные и делаются из одного места, а `docker image prune` — операция уровня
-всего сервера, где живут и фронтенд, и пограничный стенд, поэтому её не стоит
-прятать внутрь деплоя одного приложения.
+Сессию реестра открывает CI, а deploy-скрипт после запуска удаляет неиспользуемые
+слои и закрывает её.
 
 Стадия DAST называется `scan`, а не `dast`. Пайплайн со стадией `dast` в этом
 namespace не проходит валидацию: GitLab отвечает `Insufficient permissions for

@@ -5,7 +5,6 @@ from pydantic import SecretStr
 
 from tests.fakes import (
     FakeGitHubClient,
-    FakeGroupRepository,
     FakeIdentityRepository,
     FakeRefreshTokenRepository,
     FakeSession,
@@ -14,8 +13,9 @@ from tests.fakes import (
 )
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
-from tramplin.services.contracts import GitHubProfile
-from tramplin.services.github_auth import GitHubAuthService
+from tramplin.models.enums import IdentityProvider
+from tramplin.services.contracts import OAuthProfile
+from tramplin.services.oauth_auth import OAuthAuthService
 from tramplin.services.session import SessionService
 from tramplin.services.users import UserService
 
@@ -26,7 +26,7 @@ TEST_SECRET = SecretStr("test-secret-value-at-least-32-bytes")
 class AuthEnv:
     """Три сервиса на общих фейковых репозиториях плюс доступ к их содержимому."""
 
-    github: GitHubAuthService
+    github: OAuthAuthService
     sessions: SessionService
     users_service: UserService
     users: FakeUserRepository
@@ -51,8 +51,8 @@ def codec(settings: Settings) -> AccessTokenCodec:
 
 
 @pytest.fixture
-def github_profile() -> GitHubProfile:
-    return GitHubProfile(
+def github_profile() -> OAuthProfile:
+    return OAuthProfile(
         provider_id="42",
         login="Student-One",
         name="Student One",
@@ -62,12 +62,11 @@ def github_profile() -> GitHubProfile:
 
 
 @pytest.fixture
-def env(settings: Settings, codec: AccessTokenCodec, github_profile: GitHubProfile) -> AuthEnv:
+def env(settings: Settings, codec: AccessTokenCodec, github_profile: OAuthProfile) -> AuthEnv:
     session = FakeSession()
     users = FakeUserRepository()
     identities = FakeIdentityRepository(users.users)
     refresh_tokens = FakeRefreshTokenRepository()
-    groups = FakeGroupRepository()
     sessions = SessionService(
         session=session,
         users=users,
@@ -76,11 +75,12 @@ def env(settings: Settings, codec: AccessTokenCodec, github_profile: GitHubProfi
         settings=settings,
     )
     return AuthEnv(
-        github=GitHubAuthService(
+        github=OAuthAuthService(
             session=session,
             users=users,
             identities=identities,
-            github=FakeGitHubClient(github_profile),
+            provider=IdentityProvider.GITHUB,
+            client=FakeGitHubClient(github_profile),
             state_store=FakeStateStore(),
             sessions=sessions,
         ),
@@ -89,7 +89,6 @@ def env(settings: Settings, codec: AccessTokenCodec, github_profile: GitHubProfi
             session=session,
             users=users,
             identities=identities,
-            groups=groups,
         ),
         users=users,
         identities=identities,

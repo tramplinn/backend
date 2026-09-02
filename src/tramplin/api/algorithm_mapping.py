@@ -1,0 +1,99 @@
+from tramplin.api.schemas.algorithms import (
+    PracticeSetOut,
+    ProblemAuthorOut,
+    ProblemOut,
+    RunCaseOut,
+    SampleCaseOut,
+    SetProblemOut,
+    SubmissionOut,
+    TemplateAuthorOut,
+    TemplateStudentOut,
+    TestCaseOut,
+)
+from tramplin.models.algorithms import AlgorithmProblem, AlgorithmSubmission, PracticeSet
+
+
+def problem_author_out(problem: AlgorithmProblem) -> ProblemAuthorOut:
+    return ProblemAuthorOut(
+        id=problem.id,
+        provider=problem.provider,
+        external_key=problem.external_key,
+        external_url=problem.external_url,
+        title=problem.title,
+        statement_md=problem.statement_md,
+        statement_html=problem.statement_html,
+        difficulty=problem.difficulty,
+        topics=problem.topics,
+        time_limit_ms=problem.time_limit_ms,
+        memory_limit_kb=problem.memory_limit_kb,
+        status=problem.status,
+        test_cases=[TestCaseOut.model_validate(case) for case in problem.test_cases],
+        templates=[TemplateAuthorOut.model_validate(template) for template in problem.templates],
+    )
+
+
+def problem_out(problem: AlgorithmProblem) -> ProblemOut:
+    return ProblemOut(
+        id=problem.id,
+        provider=problem.provider,
+        external_key=problem.external_key,
+        external_url=problem.external_url,
+        title=problem.title,
+        statement_html=problem.statement_html,
+        difficulty=problem.difficulty,
+        topics=problem.topics,
+        time_limit_ms=problem.time_limit_ms,
+        memory_limit_kb=problem.memory_limit_kb,
+        samples=[
+            SampleCaseOut.model_validate(case) for case in problem.test_cases if case.is_sample
+        ],
+        templates=[TemplateStudentOut.model_validate(template) for template in problem.templates],
+    )
+
+
+def set_out(practice_set: PracticeSet) -> PracticeSetOut:
+    return PracticeSetOut(
+        id=practice_set.id,
+        title=practice_set.title,
+        description=practice_set.description,
+        mode=practice_set.mode,
+        duration_minutes=practice_set.duration_minutes,
+        status=practice_set.status,
+        problems=[
+            SetProblemOut(
+                problem_id=item.problem_id,
+                position=item.position,
+                recommended_minutes=item.recommended_minutes,
+                title=item.problem.title,
+                difficulty=item.problem.difficulty,
+            )
+            for item in practice_set.problems
+        ],
+    )
+
+
+def submission_out(submission: AlgorithmSubmission) -> SubmissionOut:
+    raw_cases = submission.result_json.get("cases", []) if submission.result_json else []
+    cases = (
+        [RunCaseOut.model_validate(case) for case in raw_cases if isinstance(case, dict)]
+        if isinstance(raw_cases, list)
+        else []
+    )
+    return SubmissionOut(
+        id=submission.id,
+        session_id=submission.session_id,
+        problem_id=submission.problem_id,
+        kind=submission.kind,
+        language=submission.language,
+        status=submission.status,
+        verdict=submission.verdict,
+        runtime_ms=submission.runtime_ms,
+        memory_kb=submission.memory_kb,
+        failed_test=submission.failed_test,
+        stdout=submission.stdout if submission.kind.value == "run" else None,
+        stderr=submission.stderr if submission.kind.value == "run" else None,
+        safe_error=submission.safe_error,
+        cases=cases if submission.kind.value == "run" else [],
+        created_at=submission.created_at,
+        finished_at=submission.finished_at,
+    )

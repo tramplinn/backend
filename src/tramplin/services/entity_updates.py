@@ -7,11 +7,10 @@ from tramplin.core.errors import ConflictError, InvalidUpdateError
 from tramplin.models.base import Base
 
 
-def apply_changes(entity: object, changes: dict[str, Any], *, required: set[str]) -> None:
+def validate_required_updates(changes: dict[str, Any], required: set[str]) -> None:
     for field, value in changes.items():
         if field in required and value is None:
             raise InvalidUpdateError(f"Поле {field} не может быть null", field=field)
-        setattr(entity, field, value)
 
 
 def mark_created(entity: Base, actor_id: uuid.UUID) -> None:
@@ -64,7 +63,7 @@ def apply_order_by[T: Positioned](
     by_id = {key(item): item for item in items}
     requested = set(ordered_ids)
     existing = set(by_id)
-    if requested != existing:
+    if len(ordered_ids) != len(requested) or requested != existing:
         raise ConflictError(
             f"Порядок должен содержать все {subject} ровно один раз",
             missing=[str(item) for item in existing - requested],

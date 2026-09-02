@@ -6,10 +6,10 @@ from fastapi.responses import RedirectResponse
 
 from tramplin.api.cookies import REFRESH_COOKIE_NAME, clear_refresh_cookie, set_refresh_cookie
 from tramplin.api.dependencies import CurrentUser
-from tramplin.api.schemas import AccessTokenOut, AuthorizeUrlOut, MeOut
+from tramplin.api.schemas import AccessTokenOut, AuthorizeUrlOut, MeOut, ProvidersOut
 from tramplin.core.config import Settings
 from tramplin.models.enums import IdentityProvider
-from tramplin.services.github_auth import GitHubAuthService
+from tramplin.services.oauth_auth import OAuthRegistry
 from tramplin.services.session import SessionService
 from tramplin.services.users import UserService
 
@@ -23,33 +23,44 @@ NextPath = Annotated[str, Query(pattern=NEXT_PATH_PATTERN, max_length=MAX_QUERY_
 OAuthParam = Annotated[str, Query(max_length=MAX_QUERY_LENGTH)]
 
 
-@router.get("/github/login")
-async def github_login(
-    github: FromDishka[GitHubAuthService],
+@router.get("/providers")
+async def providers(registry: FromDishka[OAuthRegistry]) -> ProvidersOut:
+    """Фронт рисует кнопки по этому списку: непрописанного провайдера в нём нет."""
+    return ProvidersOut(providers=registry.available)
+
+
+@router.get("/{provider}/login")
+async def provider_login(
+    provider: IdentityProvider,
+    registry: FromDishka[OAuthRegistry],
     next_path: NextPath = "/",
 ) -> AuthorizeUrlOut:
-    return AuthorizeUrlOut(authorize_url=await github.start_login(next_path))
+    url = await registry.get(provider).start_login(next_path)
+    return AuthorizeUrlOut(authorize_url=url)
 
 
-@router.get("/github/link")
-async def github_link(
+@router.get("/{provider}/link")
+async def provider_link(
+    provider: IdentityProvider,
     user: CurrentUser,
-    github: FromDishka[GitHubAuthService],
+    registry: FromDishka[OAuthRegistry],
     next_path: NextPath = "/",
 ) -> AuthorizeUrlOut:
     """Привязка второго способа входа — только явным действием залогиненного пользователя."""
-    return AuthorizeUrlOut(authorize_url=await github.start_link(user.id, next_path))
+    url = await registry.get(provider).start_link(user.id, next_path)
+    return AuthorizeUrlOut(authorize_url=url)
 
 
-@router.get("/github/callback")
-async def github_callback(
+@router.get("/{provider}/callback")
+async def provider_callback(
+    provider: IdentityProvider,
     code: OAuthParam,
     state: OAuthParam,
-    github: FromDishka[GitHubAuthService],
+    registry: FromDishka[OAuthRegistry],
     settings: FromDishka[Settings],
 ) -> RedirectResponse:
     """Токены не уезжают в URL: refresh кладём в куку, access фронт берёт через /auth/refresh."""
-    result = await github.complete_callback(code, state)
+    result = await registry.get(provider).complete_callback(code, state)
     response = RedirectResponse(
         url=f"{settings.frontend_base_url}{result.next_path}",
         status_code=status.HTTP_303_SEE_OTHER,

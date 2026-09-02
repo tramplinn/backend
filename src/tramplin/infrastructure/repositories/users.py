@@ -13,7 +13,6 @@ class UserRepository(Repository):
         *,
         query: str | None,
         role: UserRole | None,
-        group_id: uuid.UUID | None,
         is_active: bool | None,
         limit: int,
         offset: int,
@@ -31,8 +30,6 @@ class UserRepository(Repository):
             )
         if role is not None:
             filters.append(User.role == role)
-        if group_id is not None:
-            filters.append(User.group_id == group_id)
         if is_active is not None:
             filters.append(User.is_active == is_active)
 

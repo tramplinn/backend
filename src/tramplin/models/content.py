@@ -18,6 +18,7 @@ from tramplin.models.base import Base, UUIDPrimaryKey
 from tramplin.models.enums import ContentStatus
 
 if TYPE_CHECKING:
+    from tramplin.models.algorithms import PracticeSet
     from tramplin.models.assets import Asset
     from tramplin.models.quizzes import Quiz
 
@@ -37,23 +38,29 @@ def position_unique(table: str, parent: str) -> UniqueConstraint:
     )
 
 
-class Track(UUIDPrimaryKey, Base):
+class Track(UUIDPrimaryKey):
     __tablename__ = "tracks"
 
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text())
     color: Mapped[str | None] = mapped_column(String(16))
     slug: Mapped[str] = mapped_column(String(120), unique=True)
+    cover_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"),
+        index=True,
+    )
     status: Mapped[ContentStatus] = status_column()
 
-    courses: Mapped[list["TrackCourse"]] = relationship(
+    cover_asset: Mapped[Asset | None] = relationship()
+
+    courses: Mapped[list[TrackCourse]] = relationship(
         back_populates="track",
         cascade="all, delete-orphan",
         order_by="TrackCourse.position",
     )
 
 
-class Course(UUIDPrimaryKey, Base):
+class Course(UUIDPrimaryKey):
     __tablename__ = "courses"
 
     title: Mapped[str] = mapped_column(String(200))
@@ -67,13 +74,13 @@ class Course(UUIDPrimaryKey, Base):
     )
     status: Mapped[ContentStatus] = status_column()
 
-    cover_asset: Mapped["Asset | None"] = relationship()
-    modules: Mapped[list["Module"]] = relationship(
+    cover_asset: Mapped[Asset | None] = relationship()
+    modules: Mapped[list[Module]] = relationship(
         back_populates="course",
         cascade="all, delete-orphan",
         order_by="Module.position",
     )
-    tracks: Mapped[list["TrackCourse"]] = relationship(
+    tracks: Mapped[list[TrackCourse]] = relationship(
         back_populates="course",
         cascade="all, delete-orphan",
     )
@@ -97,7 +104,7 @@ class TrackCourse(Base):
     course: Mapped[Course] = relationship(back_populates="tracks")
 
 
-class Module(UUIDPrimaryKey, Base):
+class Module(UUIDPrimaryKey):
     __tablename__ = "modules"
     __table_args__ = (
         UniqueConstraint("course_id", "slug", name="uq_modules_course_id_slug"),
@@ -113,27 +120,27 @@ class Module(UUIDPrimaryKey, Base):
     status: Mapped[ContentStatus] = status_column()
 
     course: Mapped[Course] = relationship(back_populates="modules")
-    items: Mapped[list["ModuleItem"]] = relationship(
+    items: Mapped[list[ModuleItem]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan",
         order_by="ModuleItem.position",
     )
-    lessons: Mapped[list["Lesson"]] = relationship(
+    lessons: Mapped[list[Lesson]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan",
     )
-    quizzes: Mapped[list["Quiz"]] = relationship(
+    quizzes: Mapped[list[Quiz]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan",
     )
-    depends_on: Mapped[list["ModuleDep"]] = relationship(
+    depends_on: Mapped[list[ModuleDep]] = relationship(
         back_populates="module",
         cascade="all, delete-orphan",
         foreign_keys="ModuleDep.module_id",
     )
 
 
-class ModuleItem(UUIDPrimaryKey, Base):
+class ModuleItem(UUIDPrimaryKey):
     """
     Единственное место, где хранится порядок материалов модуля. Урок и тест
     идут одной лентой, поэтому и нумерация у них общая: раньше она была
@@ -143,12 +150,13 @@ class ModuleItem(UUIDPrimaryKey, Base):
     __tablename__ = "module_items"
     __table_args__ = (
         CheckConstraint(
-            "num_nonnulls(lesson_id, quiz_id) = 1",
+            "num_nonnulls(lesson_id, quiz_id, practice_set_id) = 1",
             name="module_items_one_target",
         ),
         position_unique("module_items", "module_id"),
         UniqueConstraint("lesson_id", name="uq_module_items_lesson_id"),
         UniqueConstraint("quiz_id", name="uq_module_items_quiz_id"),
+        UniqueConstraint("practice_set_id", name="uq_module_items_practice_set_id"),
         ForeignKeyConstraint(
             ["lesson_id", "module_id"],
             ["lessons.id", "lessons.module_id"],
@@ -167,10 +175,14 @@ class ModuleItem(UUIDPrimaryKey, Base):
     position: Mapped[int] = mapped_column(Integer(), default=0)
     lesson_id: Mapped[uuid.UUID | None]
     quiz_id: Mapped[uuid.UUID | None]
+    practice_set_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("practice_sets.id", ondelete="CASCADE")
+    )
 
     module: Mapped[Module] = relationship(back_populates="items")
-    lesson: Mapped["Lesson | None"] = relationship(viewonly=True)
-    quiz: Mapped["Quiz | None"] = relationship(viewonly=True)
+    lesson: Mapped[Lesson | None] = relationship(viewonly=True)
+    quiz: Mapped[Quiz | None] = relationship(viewonly=True)
+    practice_set: Mapped[PracticeSet | None] = relationship(viewonly=True)
 
 
 class ModuleDep(Base):
@@ -192,7 +204,7 @@ class ModuleDep(Base):
     depends_on: Mapped[Module] = relationship(foreign_keys=[depends_on_id])
 
 
-class Lesson(UUIDPrimaryKey, Base):
+class Lesson(UUIDPrimaryKey):
     __tablename__ = "lessons"
     __table_args__ = (
         UniqueConstraint("module_id", "slug", name="uq_lessons_module_id_slug"),
@@ -208,14 +220,14 @@ class Lesson(UUIDPrimaryKey, Base):
     status: Mapped[ContentStatus] = status_column()
 
     module: Mapped[Module] = relationship(back_populates="lessons")
-    interview_cards: Mapped[list["InterviewCard"]] = relationship(
+    interview_cards: Mapped[list[InterviewCard]] = relationship(
         back_populates="lesson",
         cascade="all, delete-orphan",
         order_by="InterviewCard.position",
     )
 
 
-class InterviewCard(UUIDPrimaryKey, Base):
+class InterviewCard(UUIDPrimaryKey):
     """Производная от блоков :::interview в body_md, напрямую не редактируется."""
 
     __tablename__ = "interview_cards"

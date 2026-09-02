@@ -6,20 +6,32 @@ stages:
   - deploy
   - scan
 
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH"
+
 default:
   tags:
     - docker
     - linux
 
 variables:
-  DOCKER_IMAGE_API: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG"
-  DOCKER_IMAGE_API_SHA: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
   SSH_USER: "user1"
   SSH_PORT: "15945"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
 
-.python:
-  image: ghcr.io/astral-sh/uv:python3.13-bookworm
+compose-config:
+  stage: lint
+  image: docker:29.7.2
+  script:
+    - cp .env.staging.example .env.runtime
+    - COMPOSE_PROJECT_NAME=tramplin-stage docker compose
+      --env-file .env.runtime -f docker-compose.staging.yml config --quiet
+
+lint:
+  stage: lint
+  image: ghcr.io/astral-sh/uv:0.12.1-python3.14-trixie-slim
   cache:
     key:
       files:
@@ -28,40 +40,39 @@ variables:
       - .uv-cache
   before_script:
     - uv sync --frozen
-  after_script:
-    - uv cache prune --ci
-
-.on-merge-and-branches:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: "$CI_COMMIT_BRANCH"
-
-.on-deploy-branches:
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "stage"'
-
-lint:
-  extends:
-    - .python
-    - .on-merge-and-branches
-  stage: lint
   script:
     - uv run ruff check src tests scripts alembic
     - uv run ruff format --check src tests scripts alembic
+  after_script:
+    - uv cache prune --ci
 
 typecheck:
-  extends:
-    - .python
-    - .on-merge-and-branches
   stage: lint
+  image: ghcr.io/astral-sh/uv:0.12.1-python3.14-trixie-slim
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .uv-cache
+  before_script:
+    - uv sync --frozen
   script:
     - uv run mypy src tests scripts alembic
+  after_script:
+    - uv cache prune --ci
 
 test:
-  extends:
-    - .python
-    - .on-merge-and-branches
   stage: test
+  image: ghcr.io/astral-sh/uv:0.12.1-python3.14-trixie-slim
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .uv-cache
+  before_script:
+    - uv sync --frozen
   script:
     - uv run pytest --junitxml=report.xml --cov-report=xml:coverage.xml
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)$/'
@@ -73,36 +84,36 @@ test:
         coverage_format: cobertura
         path: coverage.xml
     expire_in: 7 days
+  after_script:
+    - uv cache prune --ci
 
 gitleaks:
-  extends: .on-merge-and-branches
   stage: security
   image:
-    name: zricethezav/gitleaks:v8.18.2
+    name: zricethezav/gitleaks:v8.30.1
     entrypoint: [""]
   script:
     - gitleaks detect --source . --no-git --verbose --redact
 
 semgrep:
-  extends: .on-merge-and-branches
   stage: security
-  image: semgrep/semgrep
+  image: semgrep/semgrep:1.172.0
   script:
     - semgrep scan --config=p/python --config=p/owasp-top-ten --error .
 
 trivy-sca:
-  extends: .on-merge-and-branches
   stage: security
   image:
-    name: aquasec/trivy:latest
+    name: aquasec/trivy:0.74.0
     entrypoint: [""]
   script:
     - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
 
 build-and-push:
-  extends: .on-deploy-branches
   stage: build
-  image: docker:27.5.0
+  image: docker:29.7.2
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "stage"'
   retry:
     max: 2
     when:
@@ -111,54 +122,66 @@ build-and-push:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - docker build --pull -t "$DOCKER_IMAGE_API" -t "$DOCKER_IMAGE_API_SHA" .
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest
-      image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$DOCKER_IMAGE_API"
-    - docker push "$DOCKER_IMAGE_API_SHA"
-    - docker push "$DOCKER_IMAGE_API"
+    - docker build --pull -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA" .
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.74.0
+      image --scanners vuln --severity HIGH,CRITICAL --exit-code 1
+      "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
   after_script:
     - docker logout "$CI_REGISTRY"
 
-.deploy:
+deploy-stage:
   stage: deploy
-  image: alpine:latest
+  image: alpine:3.24.1
+  variables:
+    DEPLOY_PATH: "/home/$SSH_USER/apps/backend_stage"
   before_script:
     - apk add --no-cache openssh-client
-    - eval $(ssh-agent -s)
+    - export SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+    - ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
     - echo "$SSH_PRIVATE_KEY" | base64 -d | ssh-add -
-    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
     - printf 'Host *\n  Port %s\n  StrictHostKeyChecking accept-new\n' "$SSH_PORT" > ~/.ssh/config
     - chmod 600 ~/.ssh/config
   script:
     - ssh "$SSH_USER@$SERVER_IP" "mkdir -p $DEPLOY_PATH"
     - scp docker-compose.staging.yml scripts/deploy.sh "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/"
-    - scp "$ENV_FILE" "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/.env.runtime"
+    - scp "$STAGE_ENV" "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/.env.runtime"
     - ssh "$SSH_USER@$SERVER_IP" "chmod 600 $DEPLOY_PATH/.env.runtime"
     - printf '%s' "$CI_REGISTRY_PASSWORD" |
       ssh "$SSH_USER@$SERVER_IP" "docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY"
     - ssh "$SSH_USER@$SERVER_IP"
-      "DOCKER_IMAGE_API=$DOCKER_IMAGE_API_SHA COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
-       bash $DEPLOY_PATH/deploy.sh"
-    - ssh "$SSH_USER@$SERVER_IP" "docker image prune -f && docker logout $CI_REGISTRY"
-
-deploy_stage:
-  extends: .deploy
-  variables:
-    DEPLOY_PATH: "/home/$SSH_USER/apps/backend_stage"
-    COMPOSE_PROJECT_NAME: "tramplin-stage"
-    ENV_FILE: "$STAGE_ENV"
+      "bash $DEPLOY_PATH/deploy.sh '$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA' 'tramplin-stage' '$CI_REGISTRY'"
   environment:
     name: staging
     url: "$STAGE_URL"
   rules:
     - if: '$CI_COMMIT_BRANCH == "stage"'
 
-deploy_prod:
-  extends: .deploy
+deploy-production:
+  stage: deploy
+  image: alpine:3.24.1
   variables:
     DEPLOY_PATH: "/home/$SSH_USER/apps/backend_prod"
-    COMPOSE_PROJECT_NAME: "tramplin-prod"
-    ENV_FILE: "$PROD_ENV"
+  before_script:
+    - apk add --no-cache openssh-client
+    - export SSH_AUTH_SOCK=/tmp/ssh-agent.sock
+    - ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+    - echo "$SSH_PRIVATE_KEY" | base64 -d | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf 'Host *\n  Port %s\n  StrictHostKeyChecking accept-new\n' "$SSH_PORT" > ~/.ssh/config
+    - chmod 600 ~/.ssh/config
+  script:
+    - ssh "$SSH_USER@$SERVER_IP" "mkdir -p $DEPLOY_PATH"
+    - scp docker-compose.staging.yml scripts/deploy.sh "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/"
+    - scp "$PROD_ENV" "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/.env.runtime"
+    - ssh "$SSH_USER@$SERVER_IP" "chmod 600 $DEPLOY_PATH/.env.runtime"
+    - printf '%s' "$CI_REGISTRY_PASSWORD" |
+      ssh "$SSH_USER@$SERVER_IP" "docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY"
+    - ssh "$SSH_USER@$SERVER_IP"
+      "bash $DEPLOY_PATH/deploy.sh '$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA' 'tramplin-prod' '$CI_REGISTRY'"
   environment:
     name: production
     url: "$PROD_URL"
@@ -168,7 +191,7 @@ deploy_prod:
 nuclei-scan:
   stage: scan
   image:
-    name: projectdiscovery/nuclei:v3.3.8
+    name: projectdiscovery/nuclei:v3.11.0
     entrypoint: [""]
   script:
     - nuclei -u "$TARGET_URL" -severity critical,high,medium

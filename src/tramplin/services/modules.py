@@ -8,10 +8,11 @@ from tramplin.models.content import Module, ModuleDep, ModuleItem
 from tramplin.services.contracts import Transaction
 from tramplin.services.courses import CourseRepositoryPort
 from tramplin.services.entity_updates import (
-    apply_changes,
     apply_order,
+    apply_order_by,
     mark_created,
     mark_updated,
+    validate_required_updates,
 )
 
 
@@ -57,6 +58,7 @@ def next_module_item(
     actor_id: uuid.UUID,
     lesson_id: uuid.UUID | None = None,
     quiz_id: uuid.UUID | None = None,
+    practice_set_id: uuid.UUID | None = None,
 ) -> ModuleItem:
     """Создаёт следующий элемент общей ленты уроков и тестов модуля."""
     return ModuleItem(
@@ -64,6 +66,7 @@ def next_module_item(
         position=max((item.position for item in items), default=-1) + 1,
         lesson_id=lesson_id,
         quiz_id=quiz_id,
+        practice_set_id=practice_set_id,
         created_by=actor_id,
         updated_by=actor_id,
     )
@@ -115,7 +118,12 @@ class ModuleService:
         module = await self._modules.get(module_id)
         if module is None:
             raise NotFoundError("Модуль не найден")
-        apply_changes(module, changes, required={"title", "slug", "position", "status"})
+        validate_required_updates(changes, {"title", "slug", "position", "status"})
+        module.title = changes.get("title", module.title)
+        module.slug = changes.get("slug", module.slug)
+        module.summary = changes.get("summary", module.summary)
+        module.position = changes.get("position", module.position)
+        module.status = changes.get("status", module.status)
         mark_updated(module, actor_id)
         await self._transaction.commit()
         return module
@@ -182,17 +190,13 @@ class ModuleService:
         if await self._modules.get_for_update(module_id) is None:
             raise NotFoundError("Модуль не найден")
         stored = await self._modules.list_items(module_id)
-        by_id = {item.id: item for item in stored}
-        if set(item_ids) != set(by_id):
-            raise ConflictError(
-                "Порядок должен содержать все материалы модуля ровно один раз",
-                missing=[str(item) for item in set(by_id) - set(item_ids)],
-                unknown=[str(item) for item in set(item_ids) - set(by_id)],
-            )
-        for position, item_id in enumerate(item_ids):
-            item = by_id[item_id]
-            item.position = position
-            item.updated_by = actor_id
+        apply_order_by(
+            stored,
+            item_ids,
+            actor_id,
+            subject="материалы модуля",
+            key=lambda item: item.id,
+        )
         await self._transaction.commit()
 
     async def delete(self, module_id: uuid.UUID) -> None:

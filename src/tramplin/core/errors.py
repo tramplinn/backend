@@ -103,3 +103,24 @@ class InvalidLessonContentError(UnprocessableError):
 class InvalidUpdateError(UnprocessableError):
     code = "invalid_update"
     message = "Некорректные данные обновления"
+
+
+class InvalidAlgorithmProblemError(UnprocessableError):
+    code = "invalid_algorithm_problem"
+    message = "Некорректная алгоритмическая задача"
+
+
+class SessionExpiredError(ConflictError):
+    code = "session_expired"
+    message = "Время сессии истекло"
+
+
+class RunnerUnavailableError(ServiceUnavailableError):
+    code = "runner_unavailable"
+    message = "Среда выполнения кода недоступна"
+
+
+class RunnerBusyError(ServiceUnavailableError):
+    code = "runner_busy"
+    message = "Дождитесь завершения предыдущего запуска"
+    headers: ClassVar[dict[str, str] | None] = {"Retry-After": "2"}

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, cast
 
 from markdown_it import MarkdownIt
 from markdown_it.common.utils import escapeHtml
@@ -33,6 +33,11 @@ def render_lesson_content(body_md: str) -> RenderedLessonContent:
         body_html=_markdown_renderer().render(body_md),
         interview_cards=cards,
     )
+
+
+def render_markdown(body_md: str) -> str:
+    """Безопасный HTML для контента, не содержащего специальные блоки урока."""
+    return cast(str, _markdown_renderer().render(body_md))
 
 
 def _markdown_renderer() -> MarkdownIt:

@@ -28,7 +28,7 @@ class LessonProgress(Base):
     lesson: Mapped[Lesson] = relationship()
 
 
-class QuizAttempt(UUIDPrimaryKey, Base):
+class QuizAttempt(UUIDPrimaryKey):
     """Итог проверки на сервере: клиент присылает answers_json, score считает бэкенд."""
 
     __tablename__ = "quiz_attempts"

@@ -3,15 +3,23 @@ from datetime import datetime
 from typing import Any
 
 import uuid_utils.compat as uuid
-from sqlalchemy import DateTime, Enum, ForeignKey, MetaData, event, func
+from sqlalchemy import DateTime, Enum, ForeignKey, MetaData, func
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from tramplin.models.enums import (
+    AlgorithmDifficulty,
+    AlgorithmProgressStatus,
+    AlgorithmProvider,
+    AlgorithmVerdict,
     AssetMime,
     ContentStatus,
     IdentityProvider,
+    PracticeMode,
+    PracticeSessionStatus,
     QuestionType,
+    SubmissionKind,
+    SubmissionStatus,
     UserRole,
 )
 
@@ -47,9 +55,17 @@ class Base(DeclarativeBase):
         dict[str, Any]: postgresql.JSONB,
         list[Any]: postgresql.JSONB,
         AssetMime: pg_enum(AssetMime, "asset_mime"),
+        AlgorithmDifficulty: pg_enum(AlgorithmDifficulty, "algorithm_difficulty"),
+        AlgorithmProgressStatus: pg_enum(AlgorithmProgressStatus, "algorithm_progress_status"),
+        AlgorithmProvider: pg_enum(AlgorithmProvider, "algorithm_provider"),
+        AlgorithmVerdict: pg_enum(AlgorithmVerdict, "algorithm_verdict"),
         ContentStatus: pg_enum(ContentStatus, "content_status"),
         IdentityProvider: pg_enum(IdentityProvider, "identity_provider"),
         QuestionType: pg_enum(QuestionType, "question_type"),
+        PracticeMode: pg_enum(PracticeMode, "practice_mode"),
+        PracticeSessionStatus: pg_enum(PracticeSessionStatus, "practice_session_status"),
+        SubmissionKind: pg_enum(SubmissionKind, "submission_kind"),
+        SubmissionStatus: pg_enum(SubmissionStatus, "submission_status"),
         UserRole: pg_enum(UserRole, "user_role"),
     }
 
@@ -69,15 +85,17 @@ class Base(DeclarativeBase):
     )
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__} id={getattr(self, 'id', None)}>"
+        return f"<{type(self).__name__}>"
 
 
-class UUIDPrimaryKey:
+class UUIDPrimaryKey(Base):
+    __abstract__ = True
+
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id, sort_order=-100)
 
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("id", new_id())
+        super().__init__(**kwargs)
 
-@event.listens_for(Base, "init", propagate=True)
-def _assign_uuid_pk(target: object, _args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
-    """id нужен до flush(), чтобы связывать сущности в одной транзакции."""
-    if isinstance(target, UUIDPrimaryKey) and kwargs.get("id") is None:
-        kwargs["id"] = new_id()
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} id={self.id}>"

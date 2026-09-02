@@ -1,4 +1,4 @@
-from tramplin.api.schemas.auth import AccessTokenOut, AuthorizeUrlOut
+from tramplin.api.schemas.auth import AccessTokenOut, AuthorizeUrlOut, ProvidersOut
 from tramplin.api.schemas.base import ApiModel
 from tramplin.api.schemas.courses import CourseOut, CourseTreeOut
 from tramplin.api.schemas.errors import ErrorOut
@@ -17,6 +17,7 @@ __all__ = [
     "IdentityOut",
     "LessonOut",
     "MeOut",
+    "ProvidersOut",
     "QuizOut",
     "UserOut",
 ]

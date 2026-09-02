@@ -15,6 +15,7 @@ class TrackRepository(Repository):
             select(Track)
             .order_by(Track.title)
             .options(
+                selectinload(Track.cover_asset),
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),
@@ -29,6 +30,7 @@ class TrackRepository(Repository):
             select(Track)
             .where(Track.id == track_id)
             .options(
+                selectinload(Track.cover_asset),
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),
@@ -45,6 +47,7 @@ class TrackRepository(Repository):
             select(Track)
             .where(Track.slug == slug)
             .options(
+                selectinload(Track.cover_asset),
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),

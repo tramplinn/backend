@@ -6,10 +6,12 @@ import httpx
 
 from tramplin.core.config import Settings
 from tramplin.core.errors import OAuthProviderError
-from tramplin.services.contracts import GitHubProfile
+from tramplin.infrastructure.oauth_http import as_object, body, text
+from tramplin.services.contracts import OAuthProfile
 
 logger = logging.getLogger(__name__)
 
+PROVIDER_NAME: Final = "GitHub"
 OAUTH_BASE_URL: Final = "https://github.com"
 API_BASE_URL: Final = "https://api.github.com"
 SCOPE: Final = "read:user user:email"
@@ -49,16 +51,17 @@ class GitHubOAuthClient:
             },
             headers={"Accept": "application/json"},
         )
-        payload = _as_object(_body(response))
-        token = _text(payload.get("access_token"))
+        payload = as_object(body(response, PROVIDER_NAME), PROVIDER_NAME)
+        token = text(payload.get("access_token"))
         if token is None:
             logger.warning("github oauth code exchange failed: %s", payload.get("error"))
             raise OAuthProviderError("GitHub не выдал access-токен")
         return token
 
-    async def fetch_profile(self, access_token: str) -> GitHubProfile:
+    async def fetch_profile(self, access_token: str) -> OAuthProfile:
         headers = API_HEADERS | {"Authorization": f"Bearer {access_token}"}
-        payload = _as_object(_body(await self._client.get(f"{API_BASE_URL}/user", headers=headers)))
+        response = await self._client.get(f"{API_BASE_URL}/user", headers=headers)
+        payload = as_object(body(response, PROVIDER_NAME), PROVIDER_NAME)
         profile = _parse_profile(payload)
         if profile.email is not None:
             return profile
@@ -69,7 +72,7 @@ class GitHubOAuthClient:
         response = await self._client.get(f"{API_BASE_URL}/user/emails", headers=headers)
         if response.status_code != httpx.codes.OK:
             return None
-        entries = _body(response, strict=False)
+        entries = body(response, PROVIDER_NAME, strict=False)
         if not isinstance(entries, list):
             return None
         return next(
@@ -79,14 +82,14 @@ class GitHubOAuthClient:
                 if isinstance(entry, dict)
                 and entry.get("primary")
                 and entry.get("verified")
-                and (email := _text(entry.get("email")))
+                and (email := text(entry.get("email")))
             ),
             None,
         )
 
 
-def replace_email(profile: GitHubProfile, email: str | None) -> GitHubProfile:
-    return GitHubProfile(
+def replace_email(profile: OAuthProfile, email: str | None) -> OAuthProfile:
+    return OAuthProfile(
         provider_id=profile.provider_id,
         login=profile.login,
         name=profile.name,
@@ -95,38 +98,15 @@ def replace_email(profile: GitHubProfile, email: str | None) -> GitHubProfile:
     )
 
 
-def _parse_profile(payload: dict[str, object]) -> GitHubProfile:
+def _parse_profile(payload: dict[str, object]) -> OAuthProfile:
     provider_id = payload.get("id")
-    login = _text(payload.get("login"))
+    login = text(payload.get("login"))
     if provider_id is None or login is None:
         raise OAuthProviderError("GitHub вернул профиль без id или login")
-    return GitHubProfile(
+    return OAuthProfile(
         provider_id=str(provider_id),
         login=login,
-        name=_text(payload.get("name")),
-        email=_text(payload.get("email")),
-        avatar_url=_text(payload.get("avatar_url")),
+        name=text(payload.get("name")),
+        email=text(payload.get("email")),
+        avatar_url=text(payload.get("avatar_url")),
     )
-
-
-def _body(response: httpx.Response, *, strict: bool = True) -> object:
-    """Разбор ответа GitHub: чужой сервис, поэтому доверяем только проверенным полям."""
-    if strict and response.status_code >= httpx.codes.BAD_REQUEST:
-        logger.warning("github api error: %s %s", response.status_code, response.request.url)
-        raise OAuthProviderError("GitHub ответил ошибкой")
-    try:
-        return response.json()
-    except ValueError as exc:
-        if strict:
-            raise OAuthProviderError("GitHub вернул не JSON") from exc
-        return None
-
-
-def _as_object(payload: object) -> dict[str, object]:
-    if not isinstance(payload, dict):
-        raise OAuthProviderError("GitHub вернул неожиданную структуру ответа")
-    return payload
-
-
-def _text(value: object) -> str | None:
-    return value if isinstance(value, str) and value else None
