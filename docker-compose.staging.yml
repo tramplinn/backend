@@ -88,7 +88,7 @@ services:
     build: .
     image: tramplin-api:local
     restart: unless-stopped
-    command: ["faststream", "run", "tramplin.worker:app"]
+    command: ["python", "-m", "tramplin.worker"]
     env_file: .env.runtime
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tramplin}

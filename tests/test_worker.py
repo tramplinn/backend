@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
@@ -6,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 import tramplin.worker as worker
+from tramplin.core.config import Settings
 from tramplin.models.base import new_id
 
 
@@ -20,39 +22,51 @@ class SessionContext:
         return None
 
 
-async def test_execute_submission_passes_redelivery_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture
+async def runtime(settings: Settings) -> AsyncIterator[worker.AlgorithmWorkerApplication]:
+    application = worker.create_worker(settings)
+    yield application
+    await application.runner_client.aclose()
+    await application.engine.dispose()
+
+
+async def test_execute_submission_passes_redelivery_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: worker.AlgorithmWorkerApplication,
+) -> None:
     session = object()
     repository = object()
     service = SimpleNamespace(process=AsyncMock())
     service_factory = Mock(return_value=service)
-    monkeypatch.setattr(worker, "session_factory", lambda: SessionContext(session))
+    monkeypatch.setattr(runtime, "session_factory", lambda: SessionContext(session))
     monkeypatch.setattr(worker, "AlgorithmRepository", Mock(return_value=repository))
     monkeypatch.setattr(worker, "AlgorithmWorkerService", service_factory)
     submission_id = new_id()
     raw = SimpleNamespace(raw_message=SimpleNamespace(redelivered=True))
 
-    await worker.execute_submission(
+    await runtime.execute_submission(
         worker.AlgorithmJobMessage(submission_id=submission_id),
         cast(Any, raw),
     )
 
-    service_factory.assert_called_once_with(session, repository, worker.runner, worker.settings)
+    service_factory.assert_called_once_with(session, repository, runtime.runner, runtime.settings)
     service.process.assert_awaited_once_with(submission_id, redelivered=True)
 
 
 async def test_relay_outbox_waits_when_nothing_was_dispatched(
     monkeypatch: pytest.MonkeyPatch,
+    runtime: worker.AlgorithmWorkerApplication,
 ) -> None:
     session = object()
     dispatch = SimpleNamespace(dispatch_next=AsyncMock(return_value=False))
-    monkeypatch.setattr(worker, "session_factory", lambda: SessionContext(session))
+    monkeypatch.setattr(runtime, "session_factory", lambda: SessionContext(session))
     monkeypatch.setattr(worker, "AlgorithmRepository", Mock(return_value=object()))
     monkeypatch.setattr(worker, "AlgorithmDispatchService", Mock(return_value=dispatch))
     sleep = AsyncMock(side_effect=asyncio.CancelledError)
     monkeypatch.setattr(worker.asyncio, "sleep", sleep)
 
     with pytest.raises(asyncio.CancelledError):
-        await worker.relay_outbox()
+        await runtime.relay_outbox()
 
     dispatch.dispatch_next.assert_awaited_once()
     sleep.assert_awaited_once_with(0.5)
@@ -60,19 +74,20 @@ async def test_relay_outbox_waits_when_nothing_was_dispatched(
 
 async def test_relay_outbox_logs_and_retries_failures(
     monkeypatch: pytest.MonkeyPatch,
+    runtime: worker.AlgorithmWorkerApplication,
 ) -> None:
     class BrokenContext(SessionContext):
         async def __aenter__(self) -> object:
             raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(worker, "session_factory", lambda: BrokenContext(object()))
+    monkeypatch.setattr(runtime, "session_factory", lambda: BrokenContext(object()))
     log = Mock()
     monkeypatch.setattr(worker.logger, "exception", log)
     sleep = AsyncMock(side_effect=asyncio.CancelledError)
     monkeypatch.setattr(worker.asyncio, "sleep", sleep)
 
     with pytest.raises(asyncio.CancelledError):
-        await worker.relay_outbox()
+        await runtime.relay_outbox()
 
     log.assert_called_once_with("algorithm outbox relay failed")
     sleep.assert_awaited_once_with(2)
@@ -80,6 +95,7 @@ async def test_relay_outbox_logs_and_retries_failures(
 
 async def test_worker_lifecycle_starts_and_stops_resources(
     monkeypatch: pytest.MonkeyPatch,
+    runtime: worker.AlgorithmWorkerApplication,
 ) -> None:
     task = Mock()
     task.cancel = Mock()
@@ -96,12 +112,14 @@ async def test_worker_lifecycle_starts_and_stops_resources(
     engine = SimpleNamespace(dispose=AsyncMock())
     monkeypatch.setattr(worker.asyncio, "create_task", create_task)
     monkeypatch.setattr(worker.asyncio, "gather", gather)
-    monkeypatch.setattr(worker, "runner_client", client)
-    monkeypatch.setattr(worker, "engine", engine)
-    monkeypatch.setattr(worker, "relay_task", None)
+    await runtime.runner_client.aclose()
+    await runtime.engine.dispose()
+    monkeypatch.setattr(runtime, "runner_client", client)
+    monkeypatch.setattr(runtime, "engine", engine)
+    monkeypatch.setattr(runtime, "relay_task", None)
 
-    await worker.start_relay()
-    await worker.stop_relay()
+    await runtime.start_relay()
+    await runtime.stop_relay()
 
     assert len(created) == 1
     task.cancel.assert_called_once_with()
