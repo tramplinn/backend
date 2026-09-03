@@ -65,8 +65,6 @@ async def test_attach_course_is_idempotent() -> None:
         session,
         cast(Any, tracks),
         cast(Any, CourseRepositoryFake(course)),
-        # Обложку эти сценарии не трогают, репозиторий файлов не понадобится.
-        cast(Any, None),
     )
 
     await service.attach_course(track.id, course.id, actor_id=actor_id)
@@ -92,7 +90,6 @@ async def test_reorder_courses_updates_every_position_atomically() -> None:
         session,
         cast(Any, tracks),
         cast(Any, CourseRepositoryFake(first)),
-        cast(Any, None),
     )
 
     await service.reorder_courses(track.id, [second.id, first.id], actor_id)
@@ -115,7 +112,6 @@ async def test_reorder_courses_validates_track_and_exact_course_set() -> None:
         FakeSession(),
         cast(Any, tracks),
         cast(Any, CourseRepositoryFake(course)),
-        cast(Any, None),
     )
 
     with pytest.raises(ConflictError):

@@ -45,13 +45,7 @@ class Track(UUIDPrimaryKey):
     description: Mapped[str | None] = mapped_column(Text())
     color: Mapped[str | None] = mapped_column(String(16))
     slug: Mapped[str] = mapped_column(String(120), unique=True)
-    cover_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("assets.id", ondelete="SET NULL"),
-        index=True,
-    )
     status: Mapped[ContentStatus] = status_column()
-
-    cover_asset: Mapped[Asset | None] = relationship()
 
     courses: Mapped[list[TrackCourse]] = relationship(
         back_populates="track",

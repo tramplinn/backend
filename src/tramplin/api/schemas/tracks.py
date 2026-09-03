@@ -11,7 +11,6 @@ class TrackCreate(ApiModel):
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=120)
     description: str | None = None
     color: str | None = Field(default=None, max_length=16)
-    cover_asset_id: uuid.UUID | None = None
     status: ContentStatus = ContentStatus.DRAFT
 
 
@@ -24,7 +23,6 @@ class TrackUpdate(ApiModel):
     )
     description: str | None = None
     color: str | None = Field(default=None, max_length=16)
-    cover_asset_id: uuid.UUID | None = None
     status: ContentStatus | None = None
 
 
@@ -50,7 +48,5 @@ class TrackOut(ApiModel):
     slug: str
     description: str | None
     color: str | None
-    cover_asset_id: uuid.UUID | None
-    cover_url: str | None
     status: ContentStatus
     courses: list[TrackCourseOut] = Field(default_factory=list)

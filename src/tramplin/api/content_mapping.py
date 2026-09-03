@@ -49,12 +49,6 @@ def track_out(track: Track, *, published_only: bool, asset_base_url: str) -> Tra
         slug=track.slug,
         description=track.description,
         color=track.color,
-        cover_asset_id=track.cover_asset_id,
-        cover_url=(
-            f"{asset_base_url}/{track.cover_asset.s3_key}"
-            if track.cover_asset is not None
-            else None
-        ),
         status=track.status,
         courses=[
             TrackCourseOut(

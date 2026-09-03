@@ -104,29 +104,6 @@ async def test_course_cover_must_reference_an_image_asset() -> None:
         await service.update(course.id, {"cover_asset_id": pdf.id}, actor)
 
 
-async def test_track_cover_must_reference_an_image_asset() -> None:
-    track = Track(**content_model_kwargs())
-    image = Asset(filename="cover.webp", s3_key="cover", mime=AssetMime.WEBP, size=10)
-    pdf = Asset(filename="book.pdf", s3_key="book", mime=AssetMime.PDF, size=10)
-    repository = dependency(get=AsyncMock(return_value=track))
-    assets = dependency(get=AsyncMock(return_value=image))
-    service = TrackService(FakeSession(), repository, dependency(), assets)
-    actor = new_id()
-
-    result = await service.update(track.id, {"cover_asset_id": image.id}, actor)
-
-    assert result.cover_asset is image
-    assert result.cover_asset_id == image.id
-
-    assets.get.return_value = None
-    with pytest.raises(NotFoundError, match="обложки"):
-        await service.update(track.id, {"cover_asset_id": new_id()}, actor)
-
-    assets.get.return_value = pdf
-    with pytest.raises(InvalidUpdateError, match="изображение"):
-        await service.update(track.id, {"cover_asset_id": pdf.id}, actor)
-
-
 async def test_module_service_crud_dependencies_and_validation() -> None:
     course = Course(**content_model_kwargs())
     module = Module(course_id=course.id, position=0, **content_model_kwargs())
@@ -347,7 +324,7 @@ async def test_track_service_crud_attach_and_detach() -> None:
         delete_course_link=AsyncMock(),
     )
     courses = dependency(get=AsyncMock(return_value=course))
-    service = TrackService(session, tracks, courses, dependency())
+    service = TrackService(session, tracks, courses)
     actor = new_id()
 
     assert await service.list(published_only=False) == [track]
@@ -422,7 +399,7 @@ async def test_track_service_create_loads_courses_collection() -> None:
     greenlet-контекста и создание падает уже после записи в базу."""
     track = Track(**content_model_kwargs())
     tracks = dependency(add=Mock())
-    service = TrackService(FakeSession(), tracks, dependency(), dependency())
+    service = TrackService(FakeSession(), tracks, dependency())
 
     await service.create(track, new_id())
 

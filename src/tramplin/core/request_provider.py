@@ -125,9 +125,8 @@ class RequestProvider(Provider):
         session: AsyncSession,
         tracks: TrackRepository,
         courses: CourseRepository,
-        assets: AssetRepository,
     ) -> TrackService:
-        return TrackService(session, tracks, courses, assets)
+        return TrackService(session, tracks, courses)
 
     @provide
     def course_service(
