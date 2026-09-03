@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -113,3 +115,40 @@ def test_integrity_error_is_mapped_to_conflict() -> None:
 
     assert response.status_code == httpx.codes.CONFLICT
     assert b"duplicate" not in response.body
+
+
+class _UniqueViolationError(Exception):
+    """Форма ошибки asyncpg: имя ограничения лежит отдельным атрибутом."""
+
+    def __init__(self, constraint_name: str) -> None:
+        super().__init__("duplicate key value violates unique constraint")
+        self.constraint_name = constraint_name
+
+
+def test_known_constraint_names_the_field_that_clashed() -> None:
+    error = IntegrityError("INSERT", {}, _UniqueViolationError("uq_quizzes_module_id_slug"))
+
+    body = json.loads(bytes(exception_response(error).body))
+
+    assert body["message"] == "В этом модуле уже есть тест с таким адресом"
+    assert body["details"] == {"field": "slug"}
+
+
+def test_constraint_name_is_read_through_the_driver_wrapper() -> None:
+    """SQLAlchemy отдаёт ошибку адаптера драйвера, оригинал у неё в __cause__."""
+    wrapped = ValueError("wrapped by the dbapi adapter")
+    wrapped.__cause__ = _UniqueViolationError("uq_lessons_module_id_slug")
+    error = IntegrityError("INSERT", {}, wrapped)
+
+    body = json.loads(bytes(exception_response(error).body))
+
+    assert body["message"] == "В этом модуле уже есть урок с таким адресом"
+
+
+def test_unknown_constraint_keeps_the_generic_conflict() -> None:
+    error = IntegrityError("INSERT", {}, _UniqueViolationError("uq_module_items_quiz_id"))
+
+    body = json.loads(bytes(exception_response(error).body))
+
+    assert body["message"] == "Объект с такими данными уже существует"
+    assert body["details"] == {}

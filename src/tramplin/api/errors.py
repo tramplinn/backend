@@ -1,6 +1,6 @@
 import logging
 from http import HTTPStatus
-from typing import Final
+from typing import Final, NamedTuple
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -12,6 +12,25 @@ from tramplin.api.schemas import ErrorOut
 from tramplin.core.errors import AppError
 
 logger = logging.getLogger(__name__)
+
+
+class Conflict(NamedTuple):
+    """Что сказать пользователю и какое поле подсветить."""
+
+    message: str
+    field: str
+
+
+# Уникальные ограничения, в которые упирается редактор контента. Все адреса
+# (slug) проставляет клиент, поэтому без имени поля пользователю не догадаться,
+# что именно совпало: заголовки-то разные, а транслитерация даёт один slug.
+CONFLICTS: Final[dict[str, Conflict]] = {
+    "uq_quizzes_module_id_slug": Conflict("В этом модуле уже есть тест с таким адресом", "slug"),
+    "uq_lessons_module_id_slug": Conflict("В этом модуле уже есть урок с таким адресом", "slug"),
+    "uq_modules_course_id_slug": Conflict("В этом курсе уже есть модуль с таким адресом", "slug"),
+    "uq_courses_slug": Conflict("Курс с таким адресом уже существует", "slug"),
+    "uq_tracks_slug": Conflict("Трек с таким адресом уже существует", "slug"),
+}
 
 HANDLED_EXCEPTIONS: Final = (
     AppError,
@@ -58,8 +77,17 @@ def exception_response(exc: Exception) -> JSONResponse:
             headers=dict(exc.headers) if exc.headers else None,
         )
     if isinstance(exc, IntegrityError):
+        constraint = _constraint_name(exc)
+        # 409 не дотягивает до порога логирования в error_handler, поэтому раньше
+        # такой отказ не оставлял следа вообще: ни в ответе, ни в журнале.
+        logger.warning("integrity error violates %s", constraint or "unknown constraint")
+        conflict = CONFLICTS.get(constraint or "")
         return _error_response(
-            ErrorOut(code="conflict", message="Объект с такими данными уже существует"),
+            ErrorOut(
+                code="conflict",
+                message=conflict.message if conflict else "Объект с такими данными уже существует",
+                details={"field": conflict.field} if conflict else {},
+            ),
             status_code=status.HTTP_409_CONFLICT,
         )
     return _error_response(
@@ -86,6 +114,18 @@ def _validation_fields(exc: RequestValidationError) -> list[dict[str, str]]:
         {"loc": ".".join(str(part) for part in error["loc"]), "message": error["msg"]}
         for error in exc.errors()
     ]
+
+
+def _constraint_name(exc: IntegrityError) -> str | None:
+    """
+    Имя нарушенного ограничения. asyncpg кладёт его в атрибут своей ошибки,
+    а до неё два слоя обёрток: DBAPI-адаптер драйвера и сам SQLAlchemy.
+    """
+    for candidate in (exc.orig, getattr(exc.orig, "__cause__", None)):
+        name = getattr(candidate, "constraint_name", None)
+        if isinstance(name, str) and name:
+            return name
+    return None
 
 
 def _status_code_name(status_code: int) -> str:
