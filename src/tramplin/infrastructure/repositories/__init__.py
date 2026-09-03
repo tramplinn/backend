@@ -5,6 +5,7 @@ from tramplin.infrastructure.repositories.identities import UserIdentityReposito
 from tramplin.infrastructure.repositories.lesson_progress import LessonProgressRepository
 from tramplin.infrastructure.repositories.lessons import LessonRepository
 from tramplin.infrastructure.repositories.modules import ModuleRepository
+from tramplin.infrastructure.repositories.news import NewsRepository
 from tramplin.infrastructure.repositories.quiz_attempts import QuizAttemptRepository
 from tramplin.infrastructure.repositories.quizzes import QuizRepository
 from tramplin.infrastructure.repositories.refresh_tokens import RefreshTokenRepository
@@ -18,6 +19,7 @@ __all__ = [
     "LessonProgressRepository",
     "LessonRepository",
     "ModuleRepository",
+    "NewsRepository",
     "QuizAttemptRepository",
     "QuizRepository",
     "RefreshTokenRepository",

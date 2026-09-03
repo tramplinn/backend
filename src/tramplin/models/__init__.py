@@ -27,6 +27,7 @@ from tramplin.models.enums import (
     QuestionType,
     UserRole,
 )
+from tramplin.models.news import News, NewsPhoto
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.users import RefreshToken, User, UserIdentity
@@ -49,6 +50,8 @@ __all__ = [
     "LessonProgress",
     "Module",
     "ModuleDep",
+    "News",
+    "NewsPhoto",
     "PracticeSession",
     "PracticeSet",
     "PracticeSetProblem",

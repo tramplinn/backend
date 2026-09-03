@@ -14,6 +14,7 @@ from tramplin.infrastructure.repositories import (
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
+    NewsRepository,
     QuizAttemptRepository,
     QuizRepository,
     RefreshTokenRepository,
@@ -36,6 +37,7 @@ from tramplin.services.contracts import CodeRunner
 from tramplin.services.courses import CourseService
 from tramplin.services.lessons import LessonService
 from tramplin.services.modules import ModuleService
+from tramplin.services.news import NewsService
 from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAuthRegistry
 from tramplin.services.progress import ProgressService
 from tramplin.services.quiz_attempts import QuizAttemptService
@@ -64,6 +66,7 @@ class RequestProvider(Provider):
     tracks = provide(TrackRepository)
     courses = provide(CourseRepository)
     modules = provide(ModuleRepository)
+    news = provide(NewsRepository)
     lessons = provide(LessonRepository)
     quizzes = provide(QuizRepository)
     lesson_progress = provide(LessonProgressRepository)
@@ -195,6 +198,15 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> TutorService:
         return TutorService(lessons, quota, settings)
+
+    @provide
+    def news_service(
+        self,
+        session: AsyncSession,
+        news: NewsRepository,
+        assets: AssetRepository,
+    ) -> NewsService:
+        return NewsService(session, news, assets)
 
     @provide
     def asset_service(

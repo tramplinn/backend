@@ -9,6 +9,7 @@ from tramplin.infrastructure.repositories import (
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
+    NewsRepository,
     QuizAttemptRepository,
     QuizRepository,
     RefreshTokenRepository,
@@ -53,6 +54,7 @@ from tramplin.models.enums import (
     SubmissionStatus,
     UserRole,
 )
+from tramplin.models.news import News
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.users import RefreshToken, User, UserIdentity
@@ -91,6 +93,20 @@ def session_with(*values: Any, total: int = 1) -> Any:
             },
         )(),
     )
+
+
+async def test_news_repository_reads_the_feed_and_single_items() -> None:
+    news = News(title="Новость", slug="novost", body_md="", status=ContentStatus.PUBLISHED)
+    session = session_with(news, total=3)
+    repository = NewsRepository(session)
+
+    assert await repository.list(published_only=True, limit=10, offset=0) == ([news], 3)
+    assert await repository.list(published_only=False, limit=10, offset=0) == ([news], 3)
+    assert await repository.get(news.id) is news
+    assert await repository.get_by_slug("novost", published_only=True) is news
+    assert await repository.get_by_slug("novost", published_only=False) is news
+    assert repository.add(news) is news
+    await repository.delete(news)
 
 
 async def test_asset_course_and_group_repositories() -> None:

@@ -8,6 +8,7 @@ from tramplin.api.schemas.modules import (
     PracticeSetModuleSummary,
     QuizModuleItemOut,
 )
+from tramplin.api.schemas.news import NewsOut
 from tramplin.api.schemas.quizzes import (
     QuizAuthorOut,
     QuizOut,
@@ -18,6 +19,7 @@ from tramplin.api.schemas.tracks import TrackCourseOut, TrackOut
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, Lesson, Module, Track
 from tramplin.models.enums import ContentStatus
+from tramplin.models.news import News
 from tramplin.models.quizzes import Quiz, QuizQuestion
 
 
@@ -71,6 +73,19 @@ def asset_out(asset: Asset, *, asset_base_url: str) -> AssetOut:
         mime=asset.mime,
         size=asset.size,
         url=f"{asset_base_url}/{asset.s3_key}",
+    )
+
+
+def news_out(news: News, *, asset_base_url: str) -> NewsOut:
+    return NewsOut(
+        id=news.id,
+        title=news.title,
+        slug=news.slug,
+        summary=news.summary,
+        body_md=news.body_md,
+        status=news.status,
+        published_at=news.published_at,
+        photos=[asset_out(photo.asset, asset_base_url=asset_base_url) for photo in news.photos],
     )
 
 
