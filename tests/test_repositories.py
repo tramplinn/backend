@@ -97,10 +97,8 @@ async def test_asset_course_and_group_repositories() -> None:
     asset = Asset(filename="a.png", s3_key="a", mime=AssetMime.PNG, size=1)
     asset_session = session_with(asset)
     assets = AssetRepository(asset_session)
-    assert await assets.list(query="a", mime=AssetMime.PNG, limit=10, offset=0) == ([asset], 1)
     assert await assets.get(asset.id) is asset
     assert assets.add(asset) is asset
-    await assets.delete(asset)
 
     course = Course(title="Course", slug="course", status=ContentStatus.PUBLISHED)
     course_session = session_with(course)

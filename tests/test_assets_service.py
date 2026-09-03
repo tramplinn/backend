@@ -1,7 +1,7 @@
 import pytest
 
 from tramplin.core.config import Settings
-from tramplin.core.errors import StorageError, UnprocessableError
+from tramplin.core.errors import UnprocessableError
 from tramplin.models.assets import Asset
 from tramplin.models.enums import AssetMime
 from tramplin.services.assets import AssetService
@@ -20,30 +20,12 @@ class AssetRepositoryFake:
     def __init__(self) -> None:
         self.assets: list[Asset] = []
 
-    async def list(
-        self,
-        *,
-        query: str | None,
-        mime: AssetMime | None,
-        limit: int,
-        offset: int,
-    ) -> tuple[list[Asset], int]:
-        assets = self.assets
-        if query:
-            assets = [asset for asset in assets if query.casefold() in asset.filename.casefold()]
-        if mime is not None:
-            assets = [asset for asset in assets if asset.mime == mime]
-        return assets[offset : offset + limit], len(assets)
-
     async def get(self, asset_id: object) -> Asset | None:
         return next((asset for asset in self.assets if asset.id == asset_id), None)
 
     def add(self, asset: Asset) -> Asset:
         self.assets.append(asset)
         return asset
-
-    async def delete(self, asset: Asset) -> None:
-        self.assets.remove(asset)
 
 
 class AssetStorageFake:
@@ -98,59 +80,3 @@ async def test_upload_rejects_oversized_file(settings: Settings) -> None:
         await service.upload("large.png", AssetMime.PNG, b"123", actor_id)
 
     assert storage.uploaded == []
-
-
-async def test_asset_list_filters_and_returns_page(settings: Settings) -> None:
-    repository = AssetRepositoryFake()
-    repository.assets.extend(
-        [
-            Asset(filename="lesson.png", s3_key="assets/1.png", mime=AssetMime.PNG, size=1),
-            Asset(filename="lesson.pdf", s3_key="assets/2.pdf", mime=AssetMime.PDF, size=1),
-        ]
-    )
-    service = AssetService(AssetTransaction(), repository, AssetStorageFake(), settings)
-
-    page = await service.list_assets(query="lesson", mime=AssetMime.PDF, limit=10)
-
-    assert [item.asset.filename for item in page.items] == ["lesson.pdf"]
-    assert page.total == 1
-
-
-async def test_delete_commits_metadata_before_removing_object(settings: Settings) -> None:
-    events: list[str] = []
-
-    class OrderedTransaction(AssetTransaction):
-        async def commit(self) -> None:
-            events.append("commit")
-
-    class OrderedStorage(AssetStorageFake):
-        async def delete(self, key: str) -> None:
-            events.append("storage")
-            await super().delete(key)
-
-    repository = AssetRepositoryFake()
-    asset = repository.add(
-        Asset(filename="lesson.png", s3_key="assets/lesson.png", mime=AssetMime.PNG, size=1)
-    )
-    service = AssetService(OrderedTransaction(), repository, OrderedStorage(), settings)
-
-    await service.delete(asset.id)
-
-    assert events == ["commit", "storage"]
-    assert repository.assets == []
-
-
-async def test_delete_tolerates_orphan_when_storage_is_down(settings: Settings) -> None:
-    class FailingStorage(AssetStorageFake):
-        async def delete(self, key: str) -> None:
-            raise StorageError
-
-    repository = AssetRepositoryFake()
-    asset = repository.add(
-        Asset(filename="lesson.png", s3_key="assets/lesson.png", mime=AssetMime.PNG, size=1)
-    )
-    service = AssetService(AssetTransaction(), repository, FailingStorage(), settings)
-
-    await service.delete(asset.id)
-
-    assert repository.assets == []
