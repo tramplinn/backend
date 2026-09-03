@@ -3,9 +3,12 @@ from datetime import datetime
 import uuid_utils.compat as uuid
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     ForeignKey,
     Index,
+    SmallInteger,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,12 +19,23 @@ from tramplin.models.enums import IdentityProvider, UserRole
 
 class User(UUIDPrimaryKey):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "experience_years >= 0 AND experience_years <= 80",
+            name="experience_years_range",
+        ),
+    )
 
     login: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str | None] = mapped_column(String(200))
     email: Mapped[str | None] = mapped_column(String(320), unique=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512))
     student_number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    headline: Mapped[str | None] = mapped_column(String(120))
+    bio: Mapped[str | None] = mapped_column(Text())
+    specialty: Mapped[str | None] = mapped_column(String(32))
+    grade: Mapped[str | None] = mapped_column(String(16))
+    experience_years: Mapped[int | None] = mapped_column(SmallInteger())
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True, server_default="true")
     password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(

@@ -2,7 +2,9 @@ import uuid_utils.compat as uuid
 
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import RefreshToken, User, UserIdentity
-from tramplin.services.contracts import OAuthProfile, OAuthState
+from tramplin.services.contracts import CourseActivity, OAuthProfile, OAuthState, ProfileStats
+
+type CourseActivities = list[CourseActivity]
 
 
 class FakeSession:
@@ -16,6 +18,8 @@ class FakeSession:
 class FakeUserRepository:
     def __init__(self) -> None:
         self.users: dict[uuid.UUID, User] = {}
+        self.stats = ProfileStats(0, 0, 0)
+        self.courses: CourseActivities = []
 
     async def list(
         self,
@@ -48,6 +52,18 @@ class FakeUserRepository:
 
     async def get_with_identities(self, user_id: uuid.UUID) -> User | None:
         return self.users.get(user_id)
+
+    async def get_active_by_login(self, login: str) -> User | None:
+        return next(
+            (user for user in self.users.values() if user.login == login and user.is_active),
+            None,
+        )
+
+    async def public_stats(self, user_id: uuid.UUID) -> ProfileStats:
+        return self.stats
+
+    async def active_courses(self, user_id: uuid.UUID) -> CourseActivities:
+        return self.courses
 
     async def login_exists(self, login: str) -> bool:
         return any(user.login == login for user in self.users.values())

@@ -5,7 +5,10 @@ import uuid_utils.compat as uuid
 from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError, UserInactiveError
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
-from tramplin.services.contracts import PageResult, Transaction
+from tramplin.services.contracts import CourseActivity, PageResult, ProfileStats, Transaction
+
+PROFILE_FIELDS = {"name", "headline", "bio", "specialty", "grade", "experience_years"}
+type CourseActivities = list[CourseActivity]
 
 
 class UserRepositoryPort(Protocol):
@@ -22,6 +25,12 @@ class UserRepositoryPort(Protocol):
     async def get(self, user_id: uuid.UUID) -> User | None: ...
 
     async def get_with_identities(self, user_id: uuid.UUID) -> User | None: ...
+
+    async def get_active_by_login(self, login: str) -> User | None: ...
+
+    async def public_stats(self, user_id: uuid.UUID) -> ProfileStats: ...
+
+    async def active_courses(self, user_id: uuid.UUID) -> CourseActivities: ...
 
     async def login_exists(self, login: str) -> bool: ...
 
@@ -100,6 +109,28 @@ class UserService:
         if user is None:
             raise NotFoundError("Пользователь не найден")
         return user
+
+    async def get_public_profile(
+        self,
+        login: str,
+    ) -> tuple[User, ProfileStats, CourseActivities]:
+        user = await self._users.get_active_by_login(login)
+        if user is None:
+            raise NotFoundError("Пользователь не найден")
+        stats = await self._users.public_stats(user.id)
+        courses = await self._users.active_courses(user.id)
+        return user, stats, courses
+
+    async def update_profile(self, user_id: uuid.UUID, changes: dict[str, Any]) -> User:
+        user = await self._users.get(user_id)
+        if user is None:
+            raise NotFoundError("Пользователь не найден")
+        for field, value in changes.items():
+            if field in PROFILE_FIELDS:
+                setattr(user, field, value)
+        user.updated_by = user_id
+        await self._session.commit()
+        return await self.get_profile(user_id)
 
     async def unlink_identity(self, user_id: uuid.UUID, provider: IdentityProvider) -> None:
         identities = await self._identities.list_for_user(user_id)

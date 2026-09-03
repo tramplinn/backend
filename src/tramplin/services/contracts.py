@@ -21,6 +21,22 @@ class PageResult[T]:
 
 
 @dataclass(frozen=True, slots=True)
+class ProfileStats:
+    completed_lessons: int
+    passed_quizzes: int
+    solved_algorithms: int
+
+
+@dataclass(frozen=True, slots=True)
+class CourseActivity:
+    slug: str
+    title: str
+    color: str | None
+    completed_lessons: int
+    total_lessons: int
+
+
+@dataclass(frozen=True, slots=True)
 class OAuthProfile:
     """Общий знаменатель профилей провайдеров: больше нам от них ничего не нужно."""
 

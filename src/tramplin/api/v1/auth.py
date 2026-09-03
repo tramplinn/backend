@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from tramplin.api.cookies import REFRESH_COOKIE_NAME, clear_refresh_cookie, set_refresh_cookie
 from tramplin.api.dependencies import CurrentUser
 from tramplin.api.schemas import AccessTokenOut, AuthorizeUrlOut, MeOut, ProvidersOut
+from tramplin.api.schemas.users import UserProfileUpdate
 from tramplin.core.config import Settings
 from tramplin.models.enums import IdentityProvider
 from tramplin.services.oauth_auth import OAuthRegistry
@@ -106,6 +107,16 @@ async def logout_everywhere(
 @router.get("/me")
 async def me(user: CurrentUser, users: FromDishka[UserService]) -> MeOut:
     return MeOut.model_validate(await users.get_profile(user.id))
+
+
+@router.patch("/me")
+async def update_me(
+    payload: UserProfileUpdate,
+    user: CurrentUser,
+    users: FromDishka[UserService],
+) -> MeOut:
+    updated = await users.update_profile(user.id, payload.model_dump(exclude_unset=True))
+    return MeOut.model_validate(updated)
 
 
 @router.delete("/identities/{provider}", status_code=status.HTTP_204_NO_CONTENT)

@@ -2,9 +2,13 @@ import pytest
 
 from tests.conftest import AuthEnv
 from tests.test_oauth_auth import start_login
+from tramplin.api.schemas.users import UserProfileUpdate
+from tramplin.api.v1.auth import update_me
+from tramplin.api.v1.users import get_user_profile, search_users
 from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User
+from tramplin.services.contracts import CourseActivity, ProfileStats
 from tramplin.services.users import ensure_role
 
 
@@ -15,6 +19,73 @@ async def test_get_profile_returns_user_with_identities(env: AuthEnv) -> None:
 
     assert profile.id == result.user.id
     assert profile.login == "student-one"
+
+
+async def test_public_profile_includes_stats_and_active_courses(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+    env.users.stats = ProfileStats(7, 2, 3)
+    course = CourseActivity("python", "Python", "#3572a5", 4, 10)
+    env.users.courses = [course]
+
+    user, stats, courses = await env.users_service.get_public_profile(result.user.login)
+
+    assert user.id == result.user.id
+    assert stats.completed_lessons == 7
+    assert courses == [course]
+
+
+async def test_update_profile_changes_only_public_fields(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+
+    updated = await env.users_service.update_profile(
+        result.user.id,
+        {
+            "name": "Семён",
+            "specialty": "backend",
+            "grade": "junior",
+            "experience_years": 2,
+            "role": UserRole.ADMIN,
+        },
+    )
+
+    assert updated.name == "Семён"
+    assert updated.specialty == "backend"
+    assert updated.grade == "junior"
+    assert updated.experience_years == 2
+    assert updated.role is UserRole.STUDENT
+
+
+async def test_public_user_routes_hide_private_fields(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+    env.users.stats = ProfileStats(1, 2, 3)
+
+    page = await search_users(env.users_service, q="student", limit=24, offset=0)
+    profile = await get_user_profile(result.user.login, env.users_service)
+
+    assert page.items[0].login == result.user.login
+    assert not hasattr(page.items[0], "email")
+    assert profile.solved_algorithms == 3
+
+
+async def test_update_me_route_returns_refreshed_profile(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+
+    profile = await update_me(
+        UserProfileUpdate(headline="Делаю API"),
+        result.user,
+        env.users_service,
+    )
+
+    assert profile.headline == "Делаю API"
+
+
+async def test_missing_public_and_editable_profiles_are_not_found(env: AuthEnv) -> None:
+    with pytest.raises(NotFoundError):
+        await env.users_service.get_profile(User(login="missing").id)
+    with pytest.raises(NotFoundError):
+        await env.users_service.get_public_profile("missing")
+    with pytest.raises(NotFoundError):
+        await env.users_service.update_profile(User(login="missing").id, {"bio": "no"})
 
 
 async def test_unlink_last_identity_is_rejected(env: AuthEnv) -> None:

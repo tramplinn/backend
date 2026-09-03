@@ -12,12 +12,14 @@ from tramplin.api.v1.health import router as health_router
 from tramplin.api.v1.learning import router as learning_router
 from tramplin.api.v1.news import router as news_router
 from tramplin.api.v1.tutor import router as tutor_router
+from tramplin.api.v1.users import router as users_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(auth_router)
 api_router.include_router(content_router)
 api_router.include_router(news_router)
+api_router.include_router(users_router)
 api_router.include_router(feedback_router)
 api_router.include_router(learning_router)
 api_router.include_router(authoring_router)
