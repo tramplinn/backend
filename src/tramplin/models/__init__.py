@@ -23,10 +23,12 @@ from tramplin.models.content import (
 from tramplin.models.enums import (
     AssetMime,
     ContentStatus,
+    FeedbackStatus,
     IdentityProvider,
     QuestionType,
     UserRole,
 )
+from tramplin.models.feedback import Feedback, FeedbackAttachment
 from tramplin.models.news import News, NewsPhoto
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
@@ -44,6 +46,9 @@ __all__ = [
     "Base",
     "ContentStatus",
     "Course",
+    "Feedback",
+    "FeedbackAttachment",
+    "FeedbackStatus",
     "IdentityProvider",
     "InterviewCard",
     "Lesson",

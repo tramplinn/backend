@@ -28,6 +28,13 @@ class QuestionType(StrEnum):
     FILE = "file"
 
 
+class FeedbackStatus(StrEnum):
+    """Обратная связь без разбора бесполезна, поэтому у неё есть состояние."""
+
+    NEW = "new"
+    RESOLVED = "resolved"
+
+
 class AssetMime(StrEnum):
     """image/svg+xml отсутствует сознательно: SVG исполняет JS, отдача со своего домена = XSS."""
 

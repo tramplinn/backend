@@ -11,6 +11,7 @@ from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
     CourseRepository,
+    FeedbackRepository,
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
@@ -35,6 +36,7 @@ from tramplin.services.algorithms import (
 from tramplin.services.assets import AssetService
 from tramplin.services.contracts import CodeRunner
 from tramplin.services.courses import CourseService
+from tramplin.services.feedback import FeedbackService
 from tramplin.services.lessons import LessonService
 from tramplin.services.modules import ModuleService
 from tramplin.services.news import NewsService
@@ -67,6 +69,7 @@ class RequestProvider(Provider):
     courses = provide(CourseRepository)
     modules = provide(ModuleRepository)
     news = provide(NewsRepository)
+    feedback = provide(FeedbackRepository)
     lessons = provide(LessonRepository)
     quizzes = provide(QuizRepository)
     lesson_progress = provide(LessonProgressRepository)
@@ -207,6 +210,15 @@ class RequestProvider(Provider):
         assets: AssetRepository,
     ) -> NewsService:
         return NewsService(session, news, assets)
+
+    @provide
+    def feedback_service(
+        self,
+        session: AsyncSession,
+        feedback: FeedbackRepository,
+        assets: AssetRepository,
+    ) -> FeedbackService:
+        return FeedbackService(session, feedback, assets)
 
     @provide
     def asset_service(

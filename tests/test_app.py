@@ -68,6 +68,8 @@ async def test_openapi_exposes_auth_routes(settings: Settings) -> None:
     assert "/api/v1/authoring/markdown/preview" in schema["paths"]
     assert "/api/v1/admin/users" in schema["paths"]
     assert "/api/v1/assets" in schema["paths"]
+    assert "/api/v1/feedback" in schema["paths"]
+    assert "/api/v1/admin/feedback" in schema["paths"]
     assert "/api/v1/admin/groups" not in schema["paths"]
 
     user_parameters = schema["paths"]["/api/v1/admin/users"]["get"]["parameters"]
