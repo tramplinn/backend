@@ -158,13 +158,32 @@ class PracticeSetOut(ApiModel):
     problems: list[SetProblemOut]
 
 
+class ProblemCardOut(ApiModel):
+    id: uuid.UUID
+    title: str
+    difficulty: AlgorithmDifficulty
+    topics: list[str]
+    provider: AlgorithmProvider
+    external_url: str | None
+    languages: list[str]
+    status: AlgorithmProgressStatus
+    attempts: int
+    solved: bool
+
+
+class ProblemCatalogOut(ApiModel):
+    items: list[ProblemCardOut]
+    topics: list[str]
+    total: int
+
+
 class ReorderProblems(ApiModel):
     problem_ids: list[uuid.UUID]
 
 
 class PracticeSessionOut(ApiModel):
     id: uuid.UUID
-    practice_set_id: uuid.UUID
+    practice_set_id: uuid.UUID | None
     mode: PracticeMode
     status: PracticeSessionStatus
     started_at: datetime

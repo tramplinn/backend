@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -15,6 +16,7 @@ from tramplin.models.algorithms import (
     PracticeSetProblem,
 )
 from tramplin.models.content import Module, ModuleItem
+from tramplin.models.enums import AlgorithmDifficulty
 
 
 class AlgorithmAuthoringRepositoryPort(Protocol):
@@ -71,6 +73,22 @@ class AlgorithmPracticeRepositoryPort(Protocol):
     async def get_problem(
         self, problem_id: uuid.UUID, *, published_only: bool
     ) -> AlgorithmProblem | None: ...
+
+    async def list_published_problems(
+        self,
+        *,
+        difficulty: AlgorithmDifficulty | None,
+        topic: str | None,
+        query: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[AlgorithmProblem], int]: ...
+
+    async def published_topics(self) -> list[str]: ...
+
+    async def progress_map(
+        self, user_id: uuid.UUID, problem_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, AlgorithmProgress]: ...
 
     async def get_set(self, set_id: uuid.UUID, *, published_only: bool) -> PracticeSet | None: ...
 

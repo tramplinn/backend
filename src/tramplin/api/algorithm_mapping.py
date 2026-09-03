@@ -1,6 +1,7 @@
 from tramplin.api.schemas.algorithms import (
     PracticeSetOut,
     ProblemAuthorOut,
+    ProblemCardOut,
     ProblemOut,
     RunCaseOut,
     SampleCaseOut,
@@ -10,7 +11,13 @@ from tramplin.api.schemas.algorithms import (
     TemplateStudentOut,
     TestCaseOut,
 )
-from tramplin.models.algorithms import AlgorithmProblem, AlgorithmSubmission, PracticeSet
+from tramplin.models.algorithms import (
+    AlgorithmProblem,
+    AlgorithmProgress,
+    AlgorithmSubmission,
+    PracticeSet,
+)
+from tramplin.models.enums import AlgorithmProgressStatus
 
 
 def problem_author_out(problem: AlgorithmProblem) -> ProblemAuthorOut:
@@ -48,6 +55,24 @@ def problem_out(problem: AlgorithmProblem) -> ProblemOut:
             SampleCaseOut.model_validate(case) for case in problem.test_cases if case.is_sample
         ],
         templates=[TemplateStudentOut.model_validate(template) for template in problem.templates],
+    )
+
+
+def problem_card_out(
+    problem: AlgorithmProblem, progress: AlgorithmProgress | None
+) -> ProblemCardOut:
+    status = progress.status if progress else AlgorithmProgressStatus.UNSEEN
+    return ProblemCardOut(
+        id=problem.id,
+        title=problem.title,
+        difficulty=problem.difficulty,
+        topics=problem.topics,
+        provider=problem.provider,
+        external_url=problem.external_url,
+        languages=[template.language for template in problem.templates],
+        status=status,
+        attempts=progress.attempts if progress else 0,
+        solved=status is AlgorithmProgressStatus.SOLVED,
     )
 
 

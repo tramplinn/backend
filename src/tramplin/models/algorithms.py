@@ -135,7 +135,8 @@ class PracticeSetProblem(Base):
 class PracticeSession(UUIDPrimaryKey):
     __tablename__ = "practice_sessions"
 
-    practice_set_id: Mapped[uuid.UUID] = mapped_column(
+    # NULL — свободная сессия тренажёра: задача решается вне набора практики.
+    practice_set_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("practice_sets.id", ondelete="RESTRICT")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
@@ -146,7 +147,7 @@ class PracticeSession(UUIDPrimaryKey):
     completed_at: Mapped[datetime | None]
     reflection_md: Mapped[str | None] = mapped_column(Text())
 
-    practice_set: Mapped[PracticeSet] = relationship()
+    practice_set: Mapped[PracticeSet | None] = relationship()
 
 
 class AlgorithmSubmission(UUIDPrimaryKey):
@@ -222,6 +223,7 @@ class AlgorithmJobOutbox(Base):
     last_error: Mapped[str | None] = mapped_column(Text())
 
 
+Index("ix_algorithm_problems_status", AlgorithmProblem.status)
 Index("ix_algorithm_test_cases_problem_id", AlgorithmTestCase.problem_id)
 Index("ix_practice_sessions_user_id", PracticeSession.user_id)
 Index("ix_algorithm_submissions_queue", AlgorithmSubmission.status, AlgorithmSubmission.created_at)

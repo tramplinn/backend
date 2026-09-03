@@ -358,6 +358,23 @@ async def test_algorithm_repository_queries_and_mutations() -> None:
     assert await repository.get_progress(user_id, problem.id, for_update=True) is progress
     assert repository.add_progress(progress) is progress
 
+    session.scalars.return_value = ScalarResultFake([problem])
+    assert await repository.list_published_problems(
+        difficulty=AlgorithmDifficulty.EASY,
+        topic="arrays",
+        query="two",
+        limit=10,
+        offset=0,
+    ) == ([problem], 1)
+    assert await repository.list_published_problems(
+        difficulty=None, topic=None, query=None, limit=10, offset=0
+    ) == ([problem], 1)
+    session.scalars.return_value = ScalarResultFake(["arrays"])
+    assert await repository.published_topics() == ["arrays"]
+    session.scalars.return_value = ScalarResultFake([progress])
+    assert await repository.progress_map(user_id, [problem.id]) == {problem.id: progress}
+    assert await repository.progress_map(user_id, []) == {}
+
 
 async def test_track_and_user_repositories() -> None:
     track = Track(title="Track", slug="track")

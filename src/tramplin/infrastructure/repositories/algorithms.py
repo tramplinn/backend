@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from datetime import datetime
 
 import uuid_utils.compat as uuid
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
@@ -16,8 +17,14 @@ from tramplin.models.algorithms import (
     PracticeSet,
     PracticeSetProblem,
 )
-from tramplin.models.enums import ContentStatus, SubmissionStatus
+from tramplin.models.enums import AlgorithmDifficulty, ContentStatus, SubmissionStatus
 from tramplin.models.users import User
+
+_DIFFICULTY_ORDER = case(
+    (AlgorithmProblem.difficulty == AlgorithmDifficulty.EASY, 0),
+    (AlgorithmProblem.difficulty == AlgorithmDifficulty.MEDIUM, 1),
+    else_=2,
+)
 
 
 class AlgorithmRepository(Repository):
@@ -39,6 +46,57 @@ class AlgorithmRepository(Repository):
         if published_only:
             stmt = stmt.where(AlgorithmProblem.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
+
+    async def list_published_problems(
+        self,
+        *,
+        difficulty: AlgorithmDifficulty | None,
+        topic: str | None,
+        query: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[AlgorithmProblem], int]:
+        filters = [AlgorithmProblem.status == ContentStatus.PUBLISHED]
+        if difficulty is not None:
+            filters.append(AlgorithmProblem.difficulty == difficulty)
+        if topic:
+            filters.append(AlgorithmProblem.topics.contains([topic]))
+        if query:
+            filters.append(AlgorithmProblem.title.ilike(f"%{query}%"))
+
+        total = await self._session.scalar(
+            select(func.count()).select_from(AlgorithmProblem).where(*filters)
+        )
+        stmt = (
+            select(AlgorithmProblem)
+            .where(*filters)
+            .options(selectinload(AlgorithmProblem.templates))
+            .order_by(_DIFFICULTY_ORDER, AlgorithmProblem.title)
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(await self._session.scalars(stmt)), int(total or 0)
+
+    async def published_topics(self) -> list[str]:
+        topic = func.unnest(AlgorithmProblem.topics).label("topic")
+        stmt = (
+            select(topic)
+            .where(AlgorithmProblem.status == ContentStatus.PUBLISHED)
+            .distinct()
+            .order_by(topic)
+        )
+        return list(await self._session.scalars(stmt))
+
+    async def progress_map(
+        self, user_id: uuid.UUID, problem_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, AlgorithmProgress]:
+        if not problem_ids:
+            return {}
+        stmt = select(AlgorithmProgress).where(
+            AlgorithmProgress.user_id == user_id,
+            AlgorithmProgress.problem_id.in_(problem_ids),
+        )
+        return {item.problem_id: item for item in await self._session.scalars(stmt)}
 
     def add_problem(self, problem: AlgorithmProblem) -> AlgorithmProblem:
         self._session.add(problem)

@@ -1,9 +1,16 @@
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from tramplin.api.algorithm_mapping import problem_author_out, problem_out, set_out, submission_out
+from tramplin.api.algorithm_mapping import (
+    problem_author_out,
+    problem_card_out,
+    problem_out,
+    set_out,
+    submission_out,
+)
 from tramplin.core.errors import (
     ConflictError,
     InvalidAlgorithmProblemError,
@@ -88,6 +95,45 @@ class AlgorithmsFake:
     async def list_problems(self) -> list[AlgorithmProblem]:
         return list(self.problems.values())
 
+    async def list_published_problems(
+        self,
+        *,
+        difficulty: AlgorithmDifficulty | None,
+        topic: str | None,
+        query: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[AlgorithmProblem], int]:
+        items = [
+            problem
+            for problem in self.problems.values()
+            if problem.status is ContentStatus.PUBLISHED
+            and (difficulty is None or problem.difficulty is difficulty)
+            and (not topic or topic in problem.topics)
+            and (not query or query.lower() in problem.title.lower())
+        ]
+        return items[offset : offset + limit], len(items)
+
+    async def published_topics(self) -> list[str]:
+        return sorted(
+            {
+                topic
+                for problem in self.problems.values()
+                if problem.status is ContentStatus.PUBLISHED
+                for topic in problem.topics
+            }
+        )
+
+    async def progress_map(
+        self, user_id: Any, problem_ids: Sequence[Any]
+    ) -> dict[Any, AlgorithmProgress]:
+        wanted = set(problem_ids)
+        return {
+            problem_id: value
+            for (owner, problem_id), value in self.progress.items()
+            if owner == user_id and problem_id in wanted
+        }
+
     async def get_problem(
         self, problem_id: Any, *, published_only: bool
     ) -> AlgorithmProblem | None:
@@ -159,7 +205,9 @@ class AlgorithmsFake:
         )
 
     def add_session(self, session: PracticeSession) -> PracticeSession:
-        session.practice_set = self.sets[session.practice_set_id]
+        session.practice_set = (
+            self.sets[session.practice_set_id] if session.practice_set_id is not None else None
+        )
         self.sessions[session.id] = session
         return session
 
@@ -422,6 +470,70 @@ async def test_student_session_enqueue_limits_and_reflection(settings: Any) -> N
     await service.complete_session(session.id, user, "done")
     with pytest.raises(SessionExpiredError):
         await service.enqueue(session.id, task.id, user, SubmissionKind.SUBMIT, "python", "x")
+
+
+async def test_catalog_lists_published_with_progress(settings: Any) -> None:
+    repo = AlgorithmsFake()
+    task, _ = published_course(repo)
+    hidden = problem()
+    repo.problems[hidden.id] = hidden
+    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    user = new_id()
+
+    catalog = await service.list_catalog(user)
+    assert [item.id for item, _ in catalog.items] == [task.id]
+    assert catalog.topics == ["arrays"]
+    assert catalog.total == 1
+    assert catalog.items[0][1] is None
+
+    repo.progress[(user, task.id)] = AlgorithmProgress(
+        user_id=user,
+        problem_id=task.id,
+        status=AlgorithmProgressStatus.SOLVED,
+        attempts=3,
+        hints_used=0,
+        first_solved_at=utc_now(),
+        last_attempt_at=utc_now(),
+        confidence=None,
+        complexity_md=None,
+        reflection_md=None,
+        last_counted_submission_id=None,
+    )
+    catalog = await service.list_catalog(user)
+    card = problem_card_out(*catalog.items[0])
+    assert card.solved is True
+    assert card.attempts == 3
+    assert card.languages == ["python"]
+
+
+async def test_catalog_filters(settings: Any) -> None:
+    repo = AlgorithmsFake()
+    task, _ = published_course(repo)
+    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    user = new_id()
+
+    assert (await service.list_catalog(user, difficulty=AlgorithmDifficulty.HARD)).total == 0
+    assert (await service.list_catalog(user, topic="graphs")).total == 0
+    assert (await service.list_catalog(user, query="two")).items[0][0].id == task.id
+    assert (await service.list_catalog(user, query="нет такой")).total == 0
+
+
+async def test_free_session_allows_any_published_problem(settings: Any) -> None:
+    repo = AlgorithmsFake()
+    task, _ = published_course(repo)
+    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    user = new_id()
+
+    session = await service.start_free_session(user)
+    assert session.practice_set_id is None
+    assert session.deadline_at is None
+    assert session.mode is PracticeMode.PRACTICE
+
+    # Задача не входит ни в один набор, но в свободной сессии это разрешено.
+    run = await service.enqueue(
+        session.id, task.id, user, SubmissionKind.SUBMIT, "python", "print(2)"
+    )
+    assert run.status is SubmissionStatus.QUEUED
 
 
 async def test_mock_session_expires(settings: Any) -> None:

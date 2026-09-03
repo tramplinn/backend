@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -27,6 +28,7 @@ from tramplin.models.algorithms import (
     PracticeSetProblem,
 )
 from tramplin.models.enums import (
+    AlgorithmDifficulty,
     AlgorithmProgressStatus,
     AlgorithmProvider,
     AlgorithmVerdict,
@@ -364,6 +366,15 @@ class AlgorithmAuthoringService:
         await self._transaction.commit()
 
 
+@dataclass(frozen=True, slots=True)
+class ProblemCatalog:
+    """Каталог тренажёра: задачи вместе с прогрессом текущего пользователя."""
+
+    items: list[tuple[AlgorithmProblem, AlgorithmProgress | None]]
+    topics: list[str]
+    total: int
+
+
 class AlgorithmPracticeService:
     def __init__(
         self,
@@ -380,6 +391,45 @@ class AlgorithmPracticeService:
         if practice_set is None:
             raise NotFoundError("Набор практики не найден")
         return practice_set
+
+    async def list_catalog(
+        self,
+        user_id: uuid.UUID,
+        *,
+        difficulty: AlgorithmDifficulty | None = None,
+        topic: str | None = None,
+        query: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ProblemCatalog:
+        problems, total = await self._algorithms.list_published_problems(
+            difficulty=difficulty, topic=topic, query=query, limit=limit, offset=offset
+        )
+        progress = await self._algorithms.progress_map(user_id, [item.id for item in problems])
+        topics = await self._algorithms.published_topics()
+        return ProblemCatalog(
+            items=[(problem, progress.get(problem.id)) for problem in problems],
+            topics=topics,
+            total=total,
+        )
+
+    async def start_free_session(self, user_id: uuid.UUID) -> PracticeSession:
+        """Сессия тренажёра вне набора: без дедлайна, любая опубликованная задача."""
+        now = utc_now()
+        practice_session = PracticeSession(
+            practice_set_id=None,
+            user_id=user_id,
+            mode=PracticeMode.PRACTICE,
+            status=PracticeSessionStatus.ACTIVE,
+            started_at=now,
+            deadline_at=None,
+            completed_at=None,
+            reflection_md=None,
+        )
+        mark_created(practice_session, user_id)
+        self._algorithms.add_session(practice_session)
+        await self._transaction.commit()
+        return practice_session
 
     async def start_session(self, set_id: uuid.UUID, user_id: uuid.UUID) -> PracticeSession:
         practice_set = await self.get_set(set_id)
@@ -457,7 +507,10 @@ class AlgorithmPracticeService:
             and utc_now() >= session.deadline_at
         ):
             raise SessionExpiredError()
-        if problem_id not in {item.problem_id for item in session.practice_set.problems}:
+        practice_set = session.practice_set
+        if practice_set is not None and problem_id not in {
+            item.problem_id for item in practice_set.problems
+        }:
             raise NotFoundError("Задача не входит в эту сессию")
         problem = await self.get_problem(problem_id)
         if problem.provider is not AlgorithmProvider.INTERNAL:

@@ -1,13 +1,21 @@
+from typing import Annotated
+
 import uuid_utils.compat as uuid
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
-from tramplin.api.algorithm_mapping import problem_out, set_out, submission_out
+from tramplin.api.algorithm_mapping import (
+    problem_card_out,
+    problem_out,
+    set_out,
+    submission_out,
+)
 from tramplin.api.dependencies import CurrentUser
 from tramplin.api.schemas.algorithms import (
     CompleteSession,
     PracticeSessionOut,
     PracticeSetOut,
+    ProblemCatalogOut,
     ProblemOut,
     ProgressOut,
     ReflectionUpdate,
@@ -16,11 +24,38 @@ from tramplin.api.schemas.algorithms import (
     SubmissionCreate,
     SubmissionOut,
 )
-from tramplin.models.enums import SubmissionKind
+from tramplin.models.enums import AlgorithmDifficulty, SubmissionKind
 from tramplin.services.algorithms import AlgorithmPracticeService
 from tramplin.services.contracts import CodeRunner
 
 router = APIRouter(route_class=DishkaRoute)
+
+
+@router.get("/algorithm-problems")
+async def list_catalog(
+    user: CurrentUser,
+    service: FromDishka[AlgorithmPracticeService],
+    difficulty: AlgorithmDifficulty | None = None,
+    topic: Annotated[str | None, Query(max_length=64)] = None,
+    query: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ProblemCatalogOut:
+    catalog = await service.list_catalog(
+        user.id, difficulty=difficulty, topic=topic, query=query, limit=limit, offset=offset
+    )
+    return ProblemCatalogOut(
+        items=[problem_card_out(problem, progress) for problem, progress in catalog.items],
+        topics=catalog.topics,
+        total=catalog.total,
+    )
+
+
+@router.post("/practice-sessions", status_code=status.HTTP_201_CREATED)
+async def start_free_session(
+    user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
+) -> PracticeSessionOut:
+    return PracticeSessionOut.model_validate(await service.start_free_session(user.id))
 
 
 @router.get("/practice-sets/{set_id}")
