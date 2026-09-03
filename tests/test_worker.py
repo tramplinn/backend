@@ -133,14 +133,36 @@ async def test_worker_healthcheck_pings_and_closes_broker(
     monkeypatch: pytest.MonkeyPatch,
     settings: Settings,
 ) -> None:
-    broker = SimpleNamespace(ping=AsyncMock(return_value=True), stop=AsyncMock())
+    broker = SimpleNamespace(
+        connect=AsyncMock(),
+        ping=AsyncMock(return_value=True),
+        stop=AsyncMock(),
+    )
     broker_factory = Mock(return_value=broker)
     monkeypatch.setattr(worker, "RabbitBroker", broker_factory)
 
     assert await worker.rabbitmq_is_healthy(settings)
 
     broker_factory.assert_called_once_with(settings.rabbitmq_url)
+    broker.connect.assert_awaited_once_with()
     broker.ping.assert_awaited_once_with(timeout=2)
+    broker.stop.assert_awaited_once_with()
+
+
+async def test_worker_healthcheck_reports_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+) -> None:
+    broker = SimpleNamespace(
+        connect=AsyncMock(side_effect=ConnectionError),
+        ping=AsyncMock(),
+        stop=AsyncMock(),
+    )
+    monkeypatch.setattr(worker, "RabbitBroker", Mock(return_value=broker))
+
+    assert not await worker.rabbitmq_is_healthy(settings)
+
+    broker.ping.assert_not_awaited()
     broker.stop.assert_awaited_once_with()
 
 

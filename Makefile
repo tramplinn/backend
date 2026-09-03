@@ -1,16 +1,17 @@
-STAGING_COMPOSE = docker compose --env-file .env.runtime -f docker-compose.staging.yml
+DEV_COMPOSE = docker compose -f dev.docker-compose.yml
+DEPLOY_COMPOSE = docker compose --env-file .env.runtime
 
 .PHONY: install up down migrate seed revision lint format typecheck test check run \
-	staging-config staging-build staging-infra staging-migrate staging-up staging-down
+	staging-config staging-up staging-down
 
 install:
 	uv sync
 
 up:
-	docker compose up -d postgres redis minio minio-init
+	$(DEV_COMPOSE) up -d postgres redis minio minio-init
 
 down:
-	docker compose down
+	$(DEV_COMPOSE) down
 
 migrate:
 	uv run alembic upgrade head
@@ -39,20 +40,10 @@ run:
 	uv run uvicorn tramplin.main:create_app --factory --reload
 
 staging-config:
-	$(STAGING_COMPOSE) config --quiet
-
-staging-build:
-	$(STAGING_COMPOSE) build api
-
-staging-infra:
-	$(STAGING_COMPOSE) up -d --wait --wait-timeout 60 postgres redis
-
-staging-migrate:
-	$(STAGING_COMPOSE) up -d --wait --wait-timeout 60 postgres redis
-	$(STAGING_COMPOSE) run --rm --no-deps api alembic upgrade head
+	$(DEPLOY_COMPOSE) config --quiet
 
 staging-up:
-	$(STAGING_COMPOSE) up -d --build --wait --wait-timeout 60 api algorithm-worker
+	$(DEPLOY_COMPOSE) up -d --build --remove-orphans --wait --wait-timeout 60
 
 staging-down:
-	$(STAGING_COMPOSE) down
+	$(DEPLOY_COMPOSE) down

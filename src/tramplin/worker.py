@@ -110,7 +110,10 @@ async def rabbitmq_is_healthy(settings: Settings | None = None) -> bool:
     settings = settings or load_settings()
     broker = RabbitBroker(settings.rabbitmq_url)
     try:
+        await asyncio.wait_for(broker.connect(), timeout=3)
         return await broker.ping(timeout=2)
+    except Exception:
+        return False
     finally:
         await broker.stop()
 

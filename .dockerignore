@@ -8,7 +8,11 @@ __pycache__
 .ruff_cache
 .coverage
 coverage.xml
+report.xml
 htmlcov
+dist
+build
+*.egg-info
 tests
 scripts
 artifacts
