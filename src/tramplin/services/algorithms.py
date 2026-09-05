@@ -96,7 +96,8 @@ class AlgorithmAuthoringService:
     async def create_problem(
         self, problem: AlgorithmProblem, actor_id: uuid.UUID
     ) -> AlgorithmProblem:
-        _validate_problem_source(problem)
+        publishing = problem.status is ContentStatus.PUBLISHED
+        _validate_problem_source(problem, require_statement=publishing)
         problem.statement_html = render_markdown(problem.statement_md)
         problem.test_cases, problem.templates = [], []
         mark_created(problem, actor_id)
@@ -127,8 +128,9 @@ class AlgorithmAuthoringService:
         problem.time_limit_ms = changes.get("time_limit_ms", problem.time_limit_ms)
         problem.memory_limit_kb = changes.get("memory_limit_kb", problem.memory_limit_kb)
         problem.status = changes.get("status", problem.status)
-        _validate_problem_source(problem)
-        if problem.status is ContentStatus.PUBLISHED:
+        publishing = problem.status is ContentStatus.PUBLISHED
+        _validate_problem_source(problem, require_statement=publishing)
+        if publishing:
             _ensure_publishable(problem)
         mark_updated(problem, actor_id)
         await self._transaction.commit()
@@ -819,8 +821,13 @@ def _new_progress(
     )
 
 
-def _validate_problem_source(problem: AlgorithmProblem) -> None:
-    if problem.provider is AlgorithmProvider.INTERNAL and not problem.statement_md.strip():
+def _validate_problem_source(problem: AlgorithmProblem, *, require_statement: bool) -> None:
+    """Условие для internal нужно только к публикации — черновик пишут постепенно."""
+    if (
+        require_statement
+        and problem.provider is AlgorithmProvider.INTERNAL
+        and not problem.statement_md.strip()
+    ):
         raise InvalidAlgorithmProblemError("Для внутренней задачи требуется условие")
     if problem.provider is not AlgorithmProvider.INTERNAL and (
         not problem.external_url or not problem.external_url.startswith("https://")
