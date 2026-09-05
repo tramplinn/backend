@@ -16,8 +16,6 @@ default:
 
 variables:
   API_IMAGE: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
-  SSH_USER: "user1"
-  SSH_PORT: "15945"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
 
 compose-config:
@@ -160,7 +158,7 @@ build:
 deploy-stage:
   extends: .deploy
   variables:
-    DEPLOY_PATH: "/home/$SSH_USER/apps/backend_stage"
+    DEPLOY_PATH: "/opt/tramplin/stage/backend"
     DEPLOY_PROJECT: "tramplin-stage"
     DEPLOY_ENV: "$STAGE_ENV"
   environment:
@@ -172,7 +170,7 @@ deploy-stage:
 deploy-production:
   extends: .deploy
   variables:
-    DEPLOY_PATH: "/home/$SSH_USER/apps/backend_prod"
+    DEPLOY_PATH: "/opt/tramplin/production/backend"
     DEPLOY_PROJECT: "tramplin-prod"
     DEPLOY_ENV: "$PROD_ENV"
   environment:
