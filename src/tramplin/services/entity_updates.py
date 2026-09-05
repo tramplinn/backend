@@ -3,8 +3,14 @@ from typing import Any, Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.core.errors import ConflictError, InvalidUpdateError
+from tramplin.core.errors import AppError, ConflictError, InvalidUpdateError
 from tramplin.models.base import Base
+
+
+def require[T](value: T | None, error: AppError) -> T:
+    if value is None:
+        raise error
+    return value
 
 
 def validate_required_updates(changes: dict[str, Any], required: set[str]) -> None:

@@ -6,7 +6,12 @@ from tramplin.core.errors import NotFoundError
 from tramplin.models.content import Course
 from tramplin.services.assets import AssetRepositoryPort, resolve_image_asset
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
+from tramplin.services.entity_updates import (
+    mark_created,
+    mark_updated,
+    require,
+    validate_required_updates,
+)
 
 
 class CourseRepositoryPort(Protocol):
@@ -18,7 +23,7 @@ class CourseRepositoryPort(Protocol):
 
     def add(self, course: Course) -> Course: ...
 
-    async def delete(self, course: Course) -> None: ...
+    async def delete_cascade(self, course: Course) -> None: ...
 
 
 class CourseService:
@@ -36,10 +41,10 @@ class CourseService:
         return await self._courses.list(published_only=published_only)
 
     async def get(self, slug: str, *, published_only: bool = True) -> Course:
-        course = await self._courses.get_by_slug(slug, published_only=published_only)
-        if course is None:
-            raise NotFoundError("Курс не найден")
-        return course
+        return require(
+            await self._courses.get_by_slug(slug, published_only=published_only),
+            NotFoundError("Курс не найден"),
+        )
 
     async def create(self, course: Course, actor_id: uuid.UUID) -> Course:
         course.cover_asset = await resolve_image_asset(
@@ -53,9 +58,7 @@ class CourseService:
     async def update(
         self, course_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> Course:
-        course = await self._courses.get(course_id)
-        if course is None:
-            raise NotFoundError("Курс не найден")
+        course = require(await self._courses.get(course_id), NotFoundError("Курс не найден"))
         if "cover_asset_id" in changes:
             cover_asset_id = changes.pop("cover_asset_id")
             course.cover_asset = await resolve_image_asset(
@@ -74,8 +77,6 @@ class CourseService:
         return course
 
     async def delete(self, course_id: uuid.UUID) -> None:
-        course = await self._courses.get(course_id)
-        if course is None:
-            raise NotFoundError("Курс не найден")
-        await self._courses.delete(course)
+        course = require(await self._courses.get(course_id), NotFoundError("Курс не найден"))
+        await self._courses.delete_cascade(course)
         await self._transaction.commit()

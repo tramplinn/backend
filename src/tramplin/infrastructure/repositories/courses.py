@@ -47,11 +47,7 @@ class CourseRepository(Repository):
             stmt = stmt.where(Course.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
 
-    def add(self, course: Course) -> Course:
-        self._session.add(course)
-        return course
-
-    async def delete(self, course: Course) -> None:
+    async def delete_cascade(self, course: Course) -> None:
         # Каскад вручную: ORM cascade="delete-orphan" не срабатывает на выставление
         # флага, а модули/уроки/тесты курса не должны остаться "живыми" сиротами.
         soft_delete(course)

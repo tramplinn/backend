@@ -30,11 +30,7 @@ class LessonProgressRepository(Repository):
         stmt = stmt.order_by(LessonProgress.completed_at)
         return list(await self._session.scalars(stmt))
 
-    def add(self, progress: LessonProgress) -> LessonProgress:
-        self._session.add(progress)
-        return progress
-
-    async def delete(self, user_id: uuid.UUID, lesson_id: uuid.UUID) -> None:
+    async def delete_for_lesson(self, user_id: uuid.UUID, lesson_id: uuid.UUID) -> None:
         stmt = delete(LessonProgress).where(
             LessonProgress.user_id == user_id,
             LessonProgress.lesson_id == lesson_id,

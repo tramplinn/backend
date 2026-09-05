@@ -128,7 +128,7 @@ async def test_asset_course_and_group_repositories() -> None:
     assert await courses.get_by_slug("course", published_only=True) is course
     assert await courses.get_by_slug("course", published_only=False) is course
     assert courses.add(course) is course
-    await courses.delete(course)
+    await courses.delete_cascade(course)
 
 
 async def test_identity_learning_and_token_repositories() -> None:
@@ -161,7 +161,7 @@ async def test_identity_learning_and_token_repositories() -> None:
     assert await progress_repository.list(user.id) == [progress]
     assert await progress_repository.list(user.id, course_id=new_id()) == [progress]
     assert progress_repository.add(progress) is progress
-    await progress_repository.delete(user.id, lesson_id)
+    await progress_repository.delete_for_lesson(user.id, lesson_id)
 
     attempt_session = session_with(attempt)
     attempt_repository = QuizAttemptRepository(attempt_session)
@@ -199,7 +199,7 @@ async def test_content_repositories() -> None:
     modules = ModuleRepository(module_session)
     assert await modules.get(module.id) is module
     assert modules.add(module) is module
-    await modules.delete(module)
+    await modules.delete_cascade(module)
     module_session.scalars.return_value = ScalarResultFake([dependency])
     assert await modules.list_dependencies(course.id, published_only=True) == [dependency]
     assert await modules.list_dependencies(course.id, published_only=False) == [dependency]

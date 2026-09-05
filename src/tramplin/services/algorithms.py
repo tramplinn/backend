@@ -63,6 +63,7 @@ from tramplin.services.entity_updates import (
     apply_order_by,
     mark_created,
     mark_updated,
+    require,
     validate_required_updates,
 )
 from tramplin.services.lesson_markdown import render_markdown
@@ -85,10 +86,10 @@ class AlgorithmAuthoringService:
         self._settings = settings
 
     async def get_problem(self, problem_id: uuid.UUID) -> AlgorithmProblem:
-        problem = await self._algorithms.get_problem(problem_id, published_only=False)
-        if problem is None:
-            raise NotFoundError("Алгоритмическая задача не найдена")
-        return problem
+        return require(
+            await self._algorithms.get_problem(problem_id, published_only=False),
+            NotFoundError("Алгоритмическая задача не найдена"),
+        )
 
     async def list_problems(self) -> list[AlgorithmProblem]:
         return await self._algorithms.list_problems()
@@ -157,9 +158,10 @@ class AlgorithmAuthoringService:
     async def update_case(
         self, case_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> AlgorithmTestCase:
-        case = await self._algorithms.get_test_case(case_id)
-        if case is None:
-            raise NotFoundError("Тестовый пример не найден")
+        case = require(
+            await self._algorithms.get_test_case(case_id),
+            NotFoundError("Тестовый пример не найден"),
+        )
         problem = await self.get_problem(case.problem_id)
         if problem.status is ContentStatus.PUBLISHED:
             raise ConflictError("Сначала верните задачу в черновик")
@@ -178,9 +180,10 @@ class AlgorithmAuthoringService:
         return case
 
     async def delete_case(self, case_id: uuid.UUID) -> None:
-        case = await self._algorithms.get_test_case(case_id)
-        if case is None:
-            raise NotFoundError("Тестовый пример не найден")
+        case = require(
+            await self._algorithms.get_test_case(case_id),
+            NotFoundError("Тестовый пример не найден"),
+        )
         problem = await self.get_problem(case.problem_id)
         if problem.status is ContentStatus.PUBLISHED:
             raise ConflictError("Сначала верните задачу в черновик")
@@ -255,17 +258,17 @@ class AlgorithmAuthoringService:
         problem = await self.get_problem(problem_id)
         if problem.status is ContentStatus.PUBLISHED:
             raise ConflictError("Сначала верните задачу в черновик")
-        template = await self._algorithms.get_template(problem_id, language)
-        if template is None:
-            raise NotFoundError("Шаблон языка не найден")
+        template = require(
+            await self._algorithms.get_template(problem_id, language),
+            NotFoundError("Шаблон языка не найден"),
+        )
         await self._algorithms.delete_template(template)
         await self._transaction.commit()
 
     async def create_set(
         self, module_id: uuid.UUID, practice_set: PracticeSet, actor_id: uuid.UUID
     ) -> PracticeSet:
-        if await self._modules.get_for_update(module_id) is None:
-            raise NotFoundError("Модуль не найден")
+        require(await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден"))
         if practice_set.status is ContentStatus.PUBLISHED:
             raise InvalidAlgorithmProblemError("Сначала добавьте задачи, затем опубликуйте набор")
         practice_set.problems = []
@@ -285,10 +288,10 @@ class AlgorithmAuthoringService:
         return practice_set
 
     async def get_set(self, set_id: uuid.UUID) -> PracticeSet:
-        practice_set = await self._algorithms.get_set(set_id, published_only=False)
-        if practice_set is None:
-            raise NotFoundError("Набор практики не найден")
-        return practice_set
+        return require(
+            await self._algorithms.get_set(set_id, published_only=False),
+            NotFoundError("Набор практики не найден"),
+        )
 
     async def list_sets(self) -> list[PracticeSet]:
         return await self._algorithms.list_sets()
@@ -365,9 +368,10 @@ class AlgorithmAuthoringService:
         practice_set = await self.get_set(set_id)
         if practice_set.status is ContentStatus.PUBLISHED:
             raise ConflictError("Сначала верните набор в черновик")
-        item = await self._algorithms.get_set_problem(set_id, problem_id)
-        if item is None:
-            raise NotFoundError("Задача не входит в набор")
+        item = require(
+            await self._algorithms.get_set_problem(set_id, problem_id),
+            NotFoundError("Задача не входит в набор"),
+        )
         await self._algorithms.delete_set_problem(item)
         await self._transaction.commit()
 
@@ -393,10 +397,10 @@ class AlgorithmPracticeService:
         self._settings = settings
 
     async def get_set(self, set_id: uuid.UUID) -> PracticeSet:
-        practice_set = await self._algorithms.get_set(set_id, published_only=True)
-        if practice_set is None:
-            raise NotFoundError("Набор практики не найден")
-        return practice_set
+        return require(
+            await self._algorithms.get_set(set_id, published_only=True),
+            NotFoundError("Набор практики не найден"),
+        )
 
     async def list_catalog(
         self,
@@ -487,10 +491,10 @@ class AlgorithmPracticeService:
         return session
 
     async def get_problem(self, problem_id: uuid.UUID) -> AlgorithmProblem:
-        problem = await self._algorithms.get_problem(problem_id, published_only=True)
-        if problem is None:
-            raise NotFoundError("Алгоритмическая задача не найдена")
-        return problem
+        return require(
+            await self._algorithms.get_problem(problem_id, published_only=True),
+            NotFoundError("Алгоритмическая задача не найдена"),
+        )
 
     async def enqueue(
         self,

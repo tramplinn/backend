@@ -10,7 +10,12 @@ from tramplin.models.enums import ContentStatus, QuestionType
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
+from tramplin.services.entity_updates import (
+    mark_created,
+    mark_updated,
+    require,
+    validate_required_updates,
+)
 from tramplin.services.lessons import LessonRepositoryPort
 from tramplin.services.modules import ModuleRepositoryPort, next_module_item
 
@@ -45,14 +50,13 @@ class QuizService:
         self._assets = assets
 
     async def get(self, quiz_id: uuid.UUID, *, published_only: bool = True) -> Quiz:
-        quiz = await self._quizzes.get(quiz_id, published_only=published_only)
-        if quiz is None:
-            raise NotFoundError("Тест не найден")
-        return quiz
+        return require(
+            await self._quizzes.get(quiz_id, published_only=published_only),
+            NotFoundError("Тест не найден"),
+        )
 
     async def create(self, module_id: uuid.UUID, quiz: Quiz, actor_id: uuid.UUID) -> Quiz:
-        if await self._modules.get_for_update(module_id) is None:
-            raise NotFoundError("Модуль не найден")
+        require(await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден"))
         await self._ensure_lesson_in_module(quiz.lesson_id, module_id)
         if quiz.status is ContentStatus.PUBLISHED:
             raise InvalidQuizError("Сначала добавьте вопросы, затем опубликуйте тест")
@@ -135,9 +139,9 @@ class QuizService:
         changes: dict[str, Any],
         actor_id: uuid.UUID,
     ) -> QuizQuestion:
-        question = await self._quizzes.get_question(question_id)
-        if question is None:
-            raise NotFoundError("Вопрос не найден")
+        question = require(
+            await self._quizzes.get_question(question_id), NotFoundError("Вопрос не найден")
+        )
         question_type = changes.get("type", question.type)
         options = changes.get("options_json", question.options_json)
         answer = changes.get("answer_json", question.answer_json)
@@ -160,9 +164,9 @@ class QuizService:
         return question
 
     async def delete_question(self, question_id: uuid.UUID) -> None:
-        question = await self._quizzes.get_question(question_id)
-        if question is None:
-            raise NotFoundError("Вопрос не найден")
+        question = require(
+            await self._quizzes.get_question(question_id), NotFoundError("Вопрос не найден")
+        )
         await self._quizzes.delete_question(question)
         await self._transaction.commit()
 
@@ -180,9 +184,9 @@ class QuizService:
             raise InvalidQuizError("Прикреплённые файлы не должны повторяться")
         assets: list[Asset] = []
         for asset_id in asset_ids:
-            asset = await self._assets.get(asset_id)
-            if asset is None:
-                raise NotFoundError("Прикреплённый файл не найден")
+            asset = require(
+                await self._assets.get(asset_id), NotFoundError("Прикреплённый файл не найден")
+            )
             assets.append(asset)
         return assets
 

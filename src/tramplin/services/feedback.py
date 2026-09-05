@@ -8,7 +8,7 @@ from tramplin.models.enums import FeedbackStatus
 from tramplin.models.feedback import Feedback, FeedbackAttachment
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import PageResult, Transaction
-from tramplin.services.entity_updates import mark_created, mark_updated
+from tramplin.services.entity_updates import mark_created, mark_updated, require
 
 # В теле класса имя list занято методом FeedbackService.list.
 type Attachments = list[FeedbackAttachment]
@@ -85,21 +85,20 @@ class FeedbackService:
         status: FeedbackStatus,
         actor_id: uuid.UUID,
     ) -> Feedback:
-        feedback = await self._require(feedback_id)
+        feedback = require(
+            await self._feedback.get(feedback_id), NotFoundError("Обращение не найдено")
+        )
         feedback.status = status
         mark_updated(feedback, actor_id)
         await self._transaction.commit()
         return feedback
 
     async def delete(self, feedback_id: uuid.UUID) -> None:
-        await self._feedback.delete(await self._require(feedback_id))
+        feedback = require(
+            await self._feedback.get(feedback_id), NotFoundError("Обращение не найдено")
+        )
+        await self._feedback.delete(feedback)
         await self._transaction.commit()
-
-    async def _require(self, feedback_id: uuid.UUID) -> Feedback:
-        feedback = await self._feedback.get(feedback_id)
-        if feedback is None:
-            raise NotFoundError("Обращение не найдено")
-        return feedback
 
     async def _build_attachments(
         self,
@@ -112,9 +111,7 @@ class FeedbackService:
             raise InvalidUpdateError("Вложения не должны повторяться", field="attachment_ids")
         attachments: Attachments = []
         for position, asset_id in enumerate(asset_ids):
-            asset = await self._assets.get(asset_id)
-            if asset is None:
-                raise NotFoundError("Вложение не найдено")
+            asset = require(await self._assets.get(asset_id), NotFoundError("Вложение не найдено"))
             if asset.created_by != actor_id:
                 raise InvalidUpdateError("Можно прикреплять только собственные файлы")
             attachment = FeedbackAttachment(asset_id=asset.id, position=position)

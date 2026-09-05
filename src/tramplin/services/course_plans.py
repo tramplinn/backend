@@ -18,7 +18,7 @@ from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import Transaction
 from tramplin.services.courses import CourseRepositoryPort
-from tramplin.services.entity_updates import mark_created, mark_updated
+from tramplin.services.entity_updates import mark_created, mark_updated, require
 from tramplin.services.lesson_markdown import render_lesson_content
 from tramplin.services.lessons import LessonRepositoryPort
 from tramplin.services.modules import ModuleRepositoryPort
@@ -269,9 +269,9 @@ class CoursePlanService:
             raise InvalidQuizError("Прикреплённые файлы не должны повторяться")
         result: list[Asset] = []
         for asset_id in ids:
-            asset = await self._assets.get(asset_id)
-            if asset is None:
-                raise NotFoundError("Прикреплённый файл не найден")
+            asset = require(
+                await self._assets.get(asset_id), NotFoundError("Прикреплённый файл не найден")
+            )
             result.append(asset)
         return result
 

@@ -6,6 +6,7 @@ from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError, U
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import CourseActivity, PageResult, ProfileStats, Transaction
+from tramplin.services.entity_updates import require
 
 PROFILE_FIELDS = {"name", "headline", "bio", "specialty", "grade", "experience_years"}
 type CourseActivities = list[CourseActivity]
@@ -105,26 +106,23 @@ class UserService:
         return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def get_profile(self, user_id: uuid.UUID) -> User:
-        user = await self._users.get_with_identities(user_id)
-        if user is None:
-            raise NotFoundError("Пользователь не найден")
-        return user
+        return require(
+            await self._users.get_with_identities(user_id), NotFoundError("Пользователь не найден")
+        )
 
     async def get_public_profile(
         self,
         login: str,
     ) -> tuple[User, ProfileStats, CourseActivities]:
-        user = await self._users.get_active_by_login(login)
-        if user is None:
-            raise NotFoundError("Пользователь не найден")
+        user = require(
+            await self._users.get_active_by_login(login), NotFoundError("Пользователь не найден")
+        )
         stats = await self._users.public_stats(user.id)
         courses = await self._users.active_courses(user.id)
         return user, stats, courses
 
     async def update_profile(self, user_id: uuid.UUID, changes: dict[str, Any]) -> User:
-        user = await self._users.get(user_id)
-        if user is None:
-            raise NotFoundError("Пользователь не найден")
+        user = require(await self._users.get(user_id), NotFoundError("Пользователь не найден"))
         for field, value in changes.items():
             if field in PROFILE_FIELDS:
                 setattr(user, field, value)
@@ -134,9 +132,10 @@ class UserService:
 
     async def unlink_identity(self, user_id: uuid.UUID, provider: IdentityProvider) -> None:
         identities = await self._identities.list_for_user(user_id)
-        target = next((i for i in identities if i.provider == provider), None)
-        if target is None:
-            raise NotFoundError("Такой способ входа не привязан")
+        target = require(
+            next((i for i in identities if i.provider == provider), None),
+            NotFoundError("Такой способ входа не привязан"),
+        )
         if len(identities) == 1:
             raise ConflictError("Нельзя отвязать единственный способ входа")
         await self._identities.delete(target)
@@ -148,9 +147,7 @@ class UserService:
         user_id: uuid.UUID,
         changes: dict[str, Any],
     ) -> User:
-        user = await self._users.get(user_id)
-        if user is None:
-            raise NotFoundError("Пользователь не найден")
+        user = require(await self._users.get(user_id), NotFoundError("Пользователь не найден"))
         if user_id == actor_id and (
             changes.get("is_active") is False
             or changes.get("role") in {UserRole.STUDENT, UserRole.TEACHER}

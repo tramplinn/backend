@@ -11,6 +11,7 @@ from tramplin.services.entity_updates import (
     apply_order_by,
     mark_created,
     mark_updated,
+    require,
     validate_required_updates,
 )
 
@@ -56,10 +57,10 @@ class TrackService:
         return await self._tracks.list(published_only=published_only)
 
     async def get(self, slug: str, *, published_only: bool = True) -> Track:
-        track = await self._tracks.get_by_slug(slug, published_only=published_only)
-        if track is None:
-            raise NotFoundError("Трек не найден")
-        return track
+        return require(
+            await self._tracks.get_by_slug(slug, published_only=published_only),
+            NotFoundError("Трек не найден"),
+        )
 
     async def create(self, track: Track, actor_id: uuid.UUID) -> Track:
         # Пустую коллекцию задаём явно: иначе после commit обращение к ней
@@ -73,9 +74,7 @@ class TrackService:
     async def update(
         self, track_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> Track:
-        track = await self._tracks.get(track_id)
-        if track is None:
-            raise NotFoundError("Трек не найден")
+        track = require(await self._tracks.get(track_id), NotFoundError("Трек не найден"))
         validate_required_updates(changes, {"title", "slug", "status"})
         track.title = changes.get("title", track.title)
         track.slug = changes.get("slug", track.slug)
@@ -92,10 +91,8 @@ class TrackService:
         course_id: uuid.UUID,
         actor_id: uuid.UUID,
     ) -> None:
-        if await self._tracks.get_for_update(track_id) is None:
-            raise NotFoundError("Трек не найден")
-        if await self._courses.get(course_id) is None:
-            raise NotFoundError("Курс не найден")
+        require(await self._tracks.get_for_update(track_id), NotFoundError("Трек не найден"))
+        require(await self._courses.get(course_id), NotFoundError("Курс не найден"))
         link = await self._tracks.get_course_link(track_id, course_id)
         if link is not None:
             return
@@ -118,8 +115,7 @@ class TrackService:
         course_ids: Sequence[uuid.UUID],
         actor_id: uuid.UUID,
     ) -> None:
-        if await self._tracks.get_for_update(track_id) is None:
-            raise NotFoundError("Трек не найден")
+        require(await self._tracks.get_for_update(track_id), NotFoundError("Трек не найден"))
         links = await self._tracks.list_course_links(track_id)
         apply_order_by(
             links,
@@ -131,17 +127,15 @@ class TrackService:
         await self._transaction.commit()
 
     async def detach_course(self, track_id: uuid.UUID, course_id: uuid.UUID) -> None:
-        if await self._tracks.get_for_update(track_id) is None:
-            raise NotFoundError("Трек не найден")
-        link = await self._tracks.get_course_link(track_id, course_id)
-        if link is None:
-            raise NotFoundError("Курс не входит в трек")
+        require(await self._tracks.get_for_update(track_id), NotFoundError("Трек не найден"))
+        link = require(
+            await self._tracks.get_course_link(track_id, course_id),
+            NotFoundError("Курс не входит в трек"),
+        )
         await self._tracks.delete_course_link(link)
         await self._transaction.commit()
 
     async def delete(self, track_id: uuid.UUID) -> None:
-        track = await self._tracks.get(track_id)
-        if track is None:
-            raise NotFoundError("Трек не найден")
+        track = require(await self._tracks.get(track_id), NotFoundError("Трек не найден"))
         await self._tracks.delete(track)
         await self._transaction.commit()

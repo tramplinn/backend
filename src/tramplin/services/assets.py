@@ -10,6 +10,7 @@ from tramplin.core.errors import InvalidUpdateError, NotFoundError, StorageError
 from tramplin.models.assets import Asset
 from tramplin.models.enums import AssetMime
 from tramplin.services.contracts import Transaction
+from tramplin.services.entity_updates import require
 
 
 class AssetRepositoryPort(Protocol):
@@ -27,9 +28,7 @@ async def resolve_image_asset(
     """Resolve an optional image reference shared by cover-bearing entities."""
     if asset_id is None:
         return None
-    asset = await assets.get(asset_id)
-    if asset is None:
-        raise NotFoundError("Файл обложки не найден")
+    asset = require(await assets.get(asset_id), NotFoundError("Файл обложки не найден"))
     if asset.mime is AssetMime.PDF:
         raise InvalidUpdateError(f"Обложкой {owner} может быть только изображение")
     return asset

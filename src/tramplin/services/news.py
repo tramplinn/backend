@@ -10,7 +10,12 @@ from tramplin.models.enums import ContentStatus
 from tramplin.models.news import News, NewsPhoto
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import PageResult, Transaction
-from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
+from tramplin.services.entity_updates import (
+    mark_created,
+    mark_updated,
+    require,
+    validate_required_updates,
+)
 
 # В теле класса имя list занято методом NewsService.list, поэтому подпись
 # _build_photos ссылается на псевдоним.
@@ -61,10 +66,10 @@ class NewsService:
         return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def get(self, slug: str, *, published_only: bool = True) -> News:
-        news = await self._news.get_by_slug(slug, published_only=published_only)
-        if news is None:
-            raise NotFoundError("Новость не найдена")
-        return news
+        return require(
+            await self._news.get_by_slug(slug, published_only=published_only),
+            NotFoundError("Новость не найдена"),
+        )
 
     async def create(
         self,
@@ -85,7 +90,7 @@ class NewsService:
         changes: dict[str, Any],
         actor_id: uuid.UUID,
     ) -> News:
-        news = await self._require(news_id)
+        news = require(await self._news.get(news_id), NotFoundError("Новость не найдена"))
         photo_ids = changes.pop("photo_ids", None)
         validate_required_updates(changes, {"title", "slug", "body_md", "status"})
         news.title = changes.get("title", news.title)
@@ -101,14 +106,9 @@ class NewsService:
         return news
 
     async def delete(self, news_id: uuid.UUID) -> None:
-        await self._news.delete(await self._require(news_id))
+        news = require(await self._news.get(news_id), NotFoundError("Новость не найдена"))
+        await self._news.delete(news)
         await self._transaction.commit()
-
-    async def _require(self, news_id: uuid.UUID) -> News:
-        news = await self._news.get(news_id)
-        if news is None:
-            raise NotFoundError("Новость не найдена")
-        return news
 
     async def _build_photos(
         self,
@@ -120,9 +120,9 @@ class NewsService:
             raise InvalidUpdateError("Фотографии не должны повторяться", field="photo_ids")
         photos: NewsPhotos = []
         for position, asset_id in enumerate(asset_ids):
-            asset = await self._assets.get(asset_id)
-            if asset is None:
-                raise NotFoundError("Фотография не найдена")
+            asset = require(
+                await self._assets.get(asset_id), NotFoundError("Фотография не найдена")
+            )
             photo = NewsPhoto(asset_id=asset.id, position=position)
             photo.asset = asset
             mark_created(photo, actor_id)

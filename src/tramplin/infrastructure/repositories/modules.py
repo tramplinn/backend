@@ -56,11 +56,7 @@ class ModuleRepository(Repository):
         self._session.add(item)
         return item
 
-    def add(self, module: Module) -> Module:
-        self._session.add(module)
-        return module
-
-    async def delete(self, module: Module) -> None:
+    async def delete_cascade(self, module: Module) -> None:
         # ORM cascade="delete-orphan" не сработает на просто выставленный флаг,
         # поэтому уроки и тесты модуля помечаем удалёнными явно, одним UPDATE.
         soft_delete(module)

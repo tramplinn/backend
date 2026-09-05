@@ -6,7 +6,12 @@ from anyio import to_thread
 from tramplin.core.errors import NotFoundError
 from tramplin.models.content import InterviewCard, Lesson
 from tramplin.services.contracts import Transaction
-from tramplin.services.entity_updates import mark_created, mark_updated, validate_required_updates
+from tramplin.services.entity_updates import (
+    mark_created,
+    mark_updated,
+    require,
+    validate_required_updates,
+)
 from tramplin.services.lesson_markdown import RenderedLessonContent, render_lesson_content
 from tramplin.services.modules import ModuleRepositoryPort, next_module_item
 
@@ -35,10 +40,10 @@ class LessonService:
         self._modules = modules
 
     async def get(self, lesson_id: uuid.UUID, *, published_only: bool = True) -> Lesson:
-        lesson = await self._lessons.get(lesson_id, published_only=published_only)
-        if lesson is None:
-            raise NotFoundError("Урок не найден")
-        return lesson
+        return require(
+            await self._lessons.get(lesson_id, published_only=published_only),
+            NotFoundError("Урок не найден"),
+        )
 
     async def list_interview_cards(
         self,
@@ -50,8 +55,7 @@ class LessonService:
         return await self._lessons.list_interview_cards(lesson_id)
 
     async def create(self, module_id: uuid.UUID, lesson: Lesson, actor_id: uuid.UUID) -> Lesson:
-        if await self._modules.get_for_update(module_id) is None:
-            raise NotFoundError("Модуль не найден")
+        require(await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден"))
         lesson.module_id = module_id
         mark_created(lesson, actor_id)
         self._apply_rendered_content(lesson, await self.preview(lesson.body_md), actor_id)
@@ -67,9 +71,10 @@ class LessonService:
     async def update(
         self, lesson_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> Lesson:
-        lesson = await self._lessons.get_with_interview_cards(lesson_id)
-        if lesson is None:
-            raise NotFoundError("Урок не найден")
+        lesson = require(
+            await self._lessons.get_with_interview_cards(lesson_id),
+            NotFoundError("Урок не найден"),
+        )
         body_md = changes.get("body_md")
         validate_required_updates(changes, {"title", "slug", "body_md", "status"})
         lesson.title = changes.get("title", lesson.title)

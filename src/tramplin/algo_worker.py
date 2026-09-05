@@ -1,6 +1,5 @@
 import asyncio as asyncio
 import logging
-import sys
 from typing import Any
 
 import httpx
@@ -8,11 +7,17 @@ import uuid_utils.compat as uuid
 from faststream import AckPolicy, FastStream
 from faststream.rabbit import QueueType, RabbitBroker, RabbitMessage, RabbitQueue
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from tramplin.core.config import Settings, load_settings
 from tramplin.infrastructure.algorithm_queue import FastStreamSubmissionQueue
 from tramplin.infrastructure.judge0 import Judge0CodeRunner
+from tramplin.infrastructure.outbox_worker import (
+    build_engine_and_sessionmaker,
+    cancel_and_await,
+    relay_outbox_loop,
+    run_cli,
+)
+from tramplin.infrastructure.outbox_worker import rabbitmq_is_healthy as _rabbitmq_is_healthy
 from tramplin.infrastructure.repositories.algorithms import AlgorithmRepository
 from tramplin.services.algorithms import AlgorithmDispatchService, AlgorithmWorkerService
 
@@ -26,12 +31,7 @@ class AlgorithmJobMessage(BaseModel):
 class AlgorithmWorkerApplication:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=True)
-        self.session_factory = async_sessionmaker(
-            self.engine,
-            expire_on_commit=False,
-            autoflush=False,
-        )
+        self.engine, self.session_factory = build_engine_and_sessionmaker(settings)
         self.broker = RabbitBroker(settings.rabbitmq_url)
         self.job_queue = RabbitQueue(
             settings.algorithm_queue_name,
@@ -69,20 +69,19 @@ class AlgorithmWorkerApplication:
             )
 
     async def relay_outbox(self) -> None:
-        """Publish committed DB jobs; duplicates after a crash are intentionally harmless."""
-        while True:
-            try:
-                async with self.session_factory() as session:
-                    dispatched = await AlgorithmDispatchService(
-                        session,
-                        AlgorithmRepository(session),
-                        self.submission_queue,
-                    ).dispatch_next()
-                if not dispatched:
-                    await asyncio.sleep(0.5)
-            except Exception:
-                logger.exception("algorithm outbox relay failed")
-                await asyncio.sleep(2)
+        async def dispatch_once() -> bool:
+            async with self.session_factory() as session:
+                return await AlgorithmDispatchService(
+                    session,
+                    AlgorithmRepository(session),
+                    self.submission_queue,
+                ).dispatch_next()
+
+        await relay_outbox_loop(
+            dispatch_once,
+            logger=logger,
+            failure_label="algorithm outbox relay failed",
+        )
 
     async def start_relay(self, **_: Any) -> None:
         self.relay_task = asyncio.create_task(
@@ -91,9 +90,7 @@ class AlgorithmWorkerApplication:
         )
 
     async def stop_relay(self, **_: Any) -> None:
-        if self.relay_task is not None:
-            self.relay_task.cancel()
-            await asyncio.gather(self.relay_task, return_exceptions=True)
+        await cancel_and_await(self.relay_task)
         await self.runner_client.aclose()
         await self.engine.dispose()
 
@@ -107,24 +104,15 @@ async def run() -> None:
 
 
 async def rabbitmq_is_healthy(settings: Settings | None = None) -> bool:
-    settings = settings or load_settings()
-    broker = RabbitBroker(settings.rabbitmq_url)
-    try:
-        await asyncio.wait_for(broker.connect(), timeout=3)
-        return await broker.ping(timeout=2)
-    except Exception:
-        return False
-    finally:
-        await broker.stop()
+    return await _rabbitmq_is_healthy(settings, RabbitBroker)
 
 
 def main() -> None:
-    if not sys.argv[1:]:
-        asyncio.run(run())
-        return
-    if sys.argv[1:] == ["healthcheck"]:
-        raise SystemExit(0 if asyncio.run(rabbitmq_is_healthy()) else 1)
-    raise SystemExit("usage: python -m tramplin.algo_worker [healthcheck]")
+    run_cli(
+        run,
+        rabbitmq_is_healthy,
+        usage="usage: python -m tramplin.algo_worker [healthcheck]",
+    )
 
 
 if __name__ == "__main__":

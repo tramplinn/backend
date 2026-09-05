@@ -15,10 +15,6 @@ class RefreshTokenRepository(Repository):
         )
         return (await self._session.scalars(stmt)).one_or_none()
 
-    def add(self, token: RefreshToken) -> RefreshToken:
-        self._session.add(token)
-        return token
-
     async def delete_for_user(self, user_id: uuid.UUID) -> int:
         """RETURNING вместо rowcount: даёт точное число удалённых строк с типом из модели."""
         stmt = (

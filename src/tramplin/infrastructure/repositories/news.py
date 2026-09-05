@@ -3,7 +3,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.base import soft_delete
 from tramplin.models.enums import ContentStatus
 from tramplin.models.news import News, NewsPhoto
 
@@ -39,10 +38,3 @@ class NewsRepository(Repository):
         if published_only:
             stmt = stmt.where(News.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
-
-    def add(self, news: News) -> News:
-        self._session.add(news)
-        return news
-
-    async def delete(self, news: News) -> None:
-        soft_delete(news)

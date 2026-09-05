@@ -7,10 +7,6 @@ from tramplin.models.progress import QuizAttempt
 
 
 class QuizAttemptRepository(Repository):
-    def add(self, attempt: QuizAttempt) -> QuizAttempt:
-        self._session.add(attempt)
-        return attempt
-
     async def list_best(self, user_id: uuid.UUID) -> list[QuizAttempt]:
         """По одной строке на тест — с наибольшим результатом пользователя."""
         ranked = (

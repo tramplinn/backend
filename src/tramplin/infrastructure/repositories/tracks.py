@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.base import soft_delete
 from tramplin.models.content import Course, Track, TrackCourse
 from tramplin.models.enums import ContentStatus
 
@@ -54,13 +53,6 @@ class TrackRepository(Repository):
         if published_only:
             stmt = stmt.where(Track.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
-
-    def add(self, track: Track) -> Track:
-        self._session.add(track)
-        return track
-
-    async def delete(self, track: Track) -> None:
-        soft_delete(track)
 
     async def get_course_link(
         self,

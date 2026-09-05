@@ -15,6 +15,7 @@ from tramplin.core.errors import (
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import OAuthProfile, OAuthState, Transaction
+from tramplin.services.entity_updates import require
 from tramplin.services.session import SessionService, TokenPair
 from tramplin.services.users import (
     UserIdentityRepositoryPort,
@@ -136,9 +137,9 @@ class OAuthAuthService:
     async def _link_identity(self, state: OAuthState, profile: OAuthProfile) -> User:
         if state.user_id is None:
             raise OAuthStateError
-        user = await self._users.get(uuid.UUID(state.user_id))
-        if user is None:
-            raise NotFoundError("Пользователь не найден")
+        user = require(
+            await self._users.get(uuid.UUID(state.user_id)), NotFoundError("Пользователь не найден")
+        )
         ensure_active(user)
 
         existing = await self._identities.get_by_provider(self._provider, profile.provider_id)
@@ -192,10 +193,10 @@ class OAuthRegistry:
         self._services = {service.provider: service for service in services}
 
     def get(self, provider: IdentityProvider) -> OAuthAuthService:
-        service = self._services.get(provider)
-        if service is None:
-            raise NotFoundError(f"Вход через {provider.value} не настроен")
-        return service
+        return require(
+            self._services.get(provider),
+            NotFoundError(f"Вход через {provider.value} не настроен"),
+        )
 
     @property
     def available(self) -> list[IdentityProvider]:

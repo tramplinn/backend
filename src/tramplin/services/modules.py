@@ -12,6 +12,7 @@ from tramplin.services.entity_updates import (
     apply_order_by,
     mark_created,
     mark_updated,
+    require,
     validate_required_updates,
 )
 
@@ -31,7 +32,7 @@ class ModuleRepositoryPort(Protocol):
 
     def add(self, module: Module) -> Module: ...
 
-    async def delete(self, module: Module) -> None: ...
+    async def delete_cascade(self, module: Module) -> None: ...
 
     async def list_dependencies(
         self,
@@ -89,23 +90,20 @@ class ModuleService:
         *,
         published_only: bool = True,
     ) -> list[ModuleDep]:
-        course = await self._courses.get_by_slug(course_slug, published_only=published_only)
-        if course is None:
-            raise NotFoundError("Курс не найден")
+        course = require(
+            await self._courses.get_by_slug(course_slug, published_only=published_only),
+            NotFoundError("Курс не найден"),
+        )
         return await self._modules.list_dependencies(
             course.id,
             published_only=published_only,
         )
 
     async def get_tree(self, module_id: uuid.UUID) -> Module:
-        module = await self._modules.get_tree(module_id)
-        if module is None:
-            raise NotFoundError("Модуль не найден")
-        return module
+        return require(await self._modules.get_tree(module_id), NotFoundError("Модуль не найден"))
 
     async def create(self, course_id: uuid.UUID, module: Module, actor_id: uuid.UUID) -> Module:
-        if await self._courses.get(course_id) is None:
-            raise NotFoundError("Курс не найден")
+        require(await self._courses.get(course_id), NotFoundError("Курс не найден"))
         module.course_id = course_id
         mark_created(module, actor_id)
         self._modules.add(module)
@@ -115,9 +113,7 @@ class ModuleService:
     async def update(
         self, module_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> Module:
-        module = await self._modules.get(module_id)
-        if module is None:
-            raise NotFoundError("Модуль не найден")
+        module = require(await self._modules.get(module_id), NotFoundError("Модуль не найден"))
         validate_required_updates(changes, {"title", "slug", "position", "status"})
         module.title = changes.get("title", module.title)
         module.slug = changes.get("slug", module.slug)
@@ -134,10 +130,12 @@ class ModuleService:
         depends_on_id: uuid.UUID,
         actor_id: uuid.UUID,
     ) -> None:
-        module = await self._modules.get(module_id)
-        dependency = await self._modules.get(depends_on_id)
-        if module is None or dependency is None:
-            raise NotFoundError("Модуль не найден")
+        module = require(
+            await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден")
+        )
+        dependency = require(
+            await self._modules.get(depends_on_id), NotFoundError("Модуль не найден")
+        )
         if module.id == dependency.id:
             raise ConflictError("Модуль не может зависеть от самого себя")
         if module.course_id != dependency.course_id:
@@ -158,9 +156,11 @@ class ModuleService:
         await self._transaction.commit()
 
     async def remove_dependency(self, module_id: uuid.UUID, depends_on_id: uuid.UUID) -> None:
-        dependency = await self._modules.get_dependency(module_id, depends_on_id)
-        if dependency is None:
-            raise NotFoundError("Зависимость модулей не найдена")
+        require(await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден"))
+        dependency = require(
+            await self._modules.get_dependency(module_id, depends_on_id),
+            NotFoundError("Зависимость модулей не найдена"),
+        )
         await self._modules.delete_dependency(dependency)
         await self._transaction.commit()
 
@@ -170,8 +170,7 @@ class ModuleService:
         module_ids: Sequence[uuid.UUID],
         actor_id: uuid.UUID,
     ) -> None:
-        if await self._courses.get(course_id) is None:
-            raise NotFoundError("Курс не найден")
+        require(await self._courses.get(course_id), NotFoundError("Курс не найден"))
         modules = await self._modules.list_for_course(course_id)
         apply_order(modules, module_ids, actor_id, subject="модули курса")
         await self._transaction.commit()
@@ -187,8 +186,7 @@ class ModuleService:
         и переставляются одной транзакцией: раздельные вызовы оставляли бы
         состояние наполовину применённым.
         """
-        if await self._modules.get_for_update(module_id) is None:
-            raise NotFoundError("Модуль не найден")
+        require(await self._modules.get_for_update(module_id), NotFoundError("Модуль не найден"))
         stored = await self._modules.list_items(module_id)
         apply_order_by(
             stored,
@@ -200,10 +198,8 @@ class ModuleService:
         await self._transaction.commit()
 
     async def delete(self, module_id: uuid.UUID) -> None:
-        module = await self._modules.get(module_id)
-        if module is None:
-            raise NotFoundError("Модуль не найден")
-        await self._modules.delete(module)
+        module = require(await self._modules.get(module_id), NotFoundError("Модуль не найден"))
+        await self._modules.delete_cascade(module)
         await self._transaction.commit()
 
 

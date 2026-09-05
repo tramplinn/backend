@@ -3,7 +3,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.base import soft_delete
 from tramplin.models.content import Course, Lesson, Module
 from tramplin.models.enums import ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
@@ -27,13 +26,6 @@ class QuizRepository(Repository):
                 or_(Quiz.lesson_id.is_(None), Lesson.status == ContentStatus.PUBLISHED),
             )
         return (await self._session.scalars(stmt)).one_or_none()
-
-    def add(self, quiz: Quiz) -> Quiz:
-        self._session.add(quiz)
-        return quiz
-
-    async def delete(self, quiz: Quiz) -> None:
-        soft_delete(quiz)
 
     async def get_question(self, question_id: uuid.UUID) -> QuizQuestion | None:
         stmt = (

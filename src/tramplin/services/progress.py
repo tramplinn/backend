@@ -26,7 +26,7 @@ class LessonProgressRepositoryPort(Protocol):
 
     def add(self, progress: LessonProgress) -> LessonProgress: ...
 
-    async def delete(self, user_id: uuid.UUID, lesson_id: uuid.UUID) -> None: ...
+    async def delete_for_lesson(self, user_id: uuid.UUID, lesson_id: uuid.UUID) -> None: ...
 
 
 class QuizAttemptRepositoryPort(Protocol):
@@ -133,5 +133,5 @@ class ProgressService:
         return progress
 
     async def reopen(self, user_id: uuid.UUID, lesson_id: uuid.UUID) -> None:
-        await self._progress.delete(user_id, lesson_id)
+        await self._progress.delete_for_lesson(user_id, lesson_id)
         await self._transaction.commit()

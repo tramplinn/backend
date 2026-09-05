@@ -56,7 +56,7 @@ async def test_course_service_crud_and_not_found() -> None:
         get=AsyncMock(return_value=course),
         get_by_slug=AsyncMock(return_value=course),
         add=Mock(),
-        delete=AsyncMock(),
+        delete_cascade=AsyncMock(),
     )
     assets = dependency(get=AsyncMock(return_value=None))
     service = CourseService(session, repository, assets)
@@ -112,8 +112,9 @@ async def test_module_service_crud_dependencies_and_validation() -> None:
     session = FakeSession()
     modules = dependency(
         get=AsyncMock(return_value=module),
+        get_for_update=AsyncMock(return_value=module),
         add=Mock(),
-        delete=AsyncMock(),
+        delete_cascade=AsyncMock(),
         list_dependencies=AsyncMock(return_value=[edge]),
         get_dependency=AsyncMock(return_value=None),
         add_dependency=Mock(),
@@ -129,7 +130,7 @@ async def test_module_service_crud_dependencies_and_validation() -> None:
     assert await service.list_dependencies("title", published_only=False) == [edge]
     assert await service.create(course.id, module, actor) is module
     assert await service.update(module.id, {"title": "Updated"}, actor) is module
-    modules.get.side_effect = [module, other]
+    modules.get.return_value = other
     await service.add_dependency(module.id, other.id, actor)
     modules.get_dependency.return_value = edge
     await service.remove_dependency(module.id, other.id)
@@ -148,17 +149,18 @@ async def test_module_service_crud_dependencies_and_validation() -> None:
         await service.update(module.id, {}, actor)
     with pytest.raises(NotFoundError):
         await service.delete(module.id)
-    modules.get.side_effect = [None, other]
+    modules.get_for_update.return_value = None
     with pytest.raises(NotFoundError):
         await service.add_dependency(module.id, other.id, actor)
-    modules.get.side_effect = [module, module]
+    modules.get_for_update.return_value = module
+    modules.get.return_value = module
     with pytest.raises(ConflictError, match="самого себя"):
         await service.add_dependency(module.id, module.id, actor)
     foreign = Module(course_id=new_id(), position=2, title="Foreign", slug="foreign")
-    modules.get.side_effect = [module, foreign]
+    modules.get.return_value = foreign
     with pytest.raises(ConflictError, match="одному курсу"):
         await service.add_dependency(module.id, foreign.id, actor)
-    modules.get.side_effect = [module, other]
+    modules.get.return_value = other
     modules.get_dependency.return_value = edge
     with pytest.raises(ConflictError, match="существует"):
         await service.add_dependency(module.id, other.id, actor)
@@ -166,10 +168,8 @@ async def test_module_service_crud_dependencies_and_validation() -> None:
     modules.list_dependencies.return_value = [
         ModuleDep(module_id=other.id, depends_on_id=module.id)
     ]
-    modules.get.side_effect = [module, other]
     with pytest.raises(ConflictError, match="цикл"):
         await service.add_dependency(module.id, other.id, actor)
-    modules.get.side_effect = None
     modules.get_dependency.return_value = None
     with pytest.raises(NotFoundError):
         await service.remove_dependency(module.id, other.id)

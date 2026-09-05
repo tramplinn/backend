@@ -115,7 +115,3 @@ class UserRepository(Repository):
     async def login_exists(self, login: str) -> bool:
         stmt = select(User.id).where(User.login == login).limit(1)
         return (await self._session.scalars(stmt)).first() is not None
-
-    def add(self, user: User) -> User:
-        self._session.add(user)
-        return user

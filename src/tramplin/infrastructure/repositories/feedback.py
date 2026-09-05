@@ -3,7 +3,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.base import soft_delete
 from tramplin.models.enums import FeedbackStatus
 from tramplin.models.feedback import Feedback, FeedbackAttachment
 
@@ -34,10 +33,3 @@ class FeedbackRepository(Repository):
     async def get(self, feedback_id: uuid.UUID) -> Feedback | None:
         stmt = select(Feedback).where(Feedback.id == feedback_id).options(*self._related)
         return (await self._session.scalars(stmt)).one_or_none()
-
-    def add(self, feedback: Feedback) -> Feedback:
-        self._session.add(feedback)
-        return feedback
-
-    async def delete(self, feedback: Feedback) -> None:
-        soft_delete(feedback)
