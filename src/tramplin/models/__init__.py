@@ -29,6 +29,7 @@ from tramplin.models.enums import (
     UserRole,
 )
 from tramplin.models.feedback import Feedback, FeedbackAttachment
+from tramplin.models.mcp_oauth import McpOAuthAuthorization, McpOAuthToken
 from tramplin.models.news import News, NewsPhoto
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
@@ -55,6 +56,8 @@ __all__ = [
     "InterviewCard",
     "Lesson",
     "LessonProgress",
+    "McpOAuthAuthorization",
+    "McpOAuthToken",
     "Module",
     "ModuleDep",
     "News",

@@ -20,3 +20,20 @@ class AccessTokenOut(ApiModel):
     access_token: str
     token_type: str = "Bearer"  # noqa: S105
     expires_at: datetime
+
+
+class McpAuthorizationRequestOut(ApiModel):
+    client_name: str
+    scope: str
+
+
+class McpAuthorizationApprovalOut(ApiModel):
+    redirect_url: str
+
+
+class McpIntrospectionOut(ApiModel):
+    active: bool = True
+    sub: str
+    login: str
+    role: str
+    scope: str = "authoring"

@@ -42,6 +42,7 @@ def settings() -> Settings:
         jwt_secret=TEST_SECRET,
         github_client_id="cid",
         github_client_secret=SecretStr("csecret"),
+        mcp_oauth_client_secret=SecretStr("mcp-client-secret"),
     )
 
 

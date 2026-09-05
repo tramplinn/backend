@@ -15,6 +15,7 @@ from tramplin.infrastructure.repositories import (
     FeedbackRepository,
     LessonProgressRepository,
     LessonRepository,
+    McpOAuthRepository,
     ModuleRepository,
     NewsRepository,
     QuizAttemptRepository,
@@ -37,9 +38,11 @@ from tramplin.services.algorithms import (
 )
 from tramplin.services.assets import AssetService
 from tramplin.services.contracts import CodeRunner
+from tramplin.services.course_plans import CoursePlanService
 from tramplin.services.courses import CourseService
 from tramplin.services.feedback import FeedbackService
 from tramplin.services.lessons import LessonService
+from tramplin.services.mcp_oauth import McpOAuthService
 from tramplin.services.modules import ModuleService
 from tramplin.services.news import NewsService
 from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAuthRegistry
@@ -81,6 +84,7 @@ class RequestProvider(Provider):
     assets = provide(AssetRepository)
     algorithms = provide(AlgorithmRepository)
     recommendations = provide(RecommendationRepository)
+    mcp_oauth = provide(McpOAuthRepository)
 
     @provide
     def session_service(
@@ -92,6 +96,28 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> SessionService:
         return SessionService(session, users, refresh_tokens, codec, settings)
+
+    @provide
+    def course_plan_service(
+        self,
+        session: AsyncSession,
+        courses: CourseRepository,
+        modules: ModuleRepository,
+        lessons: LessonRepository,
+        quizzes: QuizRepository,
+        assets: AssetRepository,
+    ) -> CoursePlanService:
+        return CoursePlanService(session, courses, modules, lessons, quizzes, assets)
+
+    @provide
+    def mcp_oauth_service(
+        self,
+        session: AsyncSession,
+        store: McpOAuthRepository,
+        users: UserRepository,
+        settings: Settings,
+    ) -> McpOAuthService:
+        return McpOAuthService(session, store, users, settings)
 
     @provide
     def user_service(

@@ -55,6 +55,11 @@ class Settings(DatabaseSettings):
     oauth_state_ttl: Duration = timedelta(minutes=10)
     oauth_state_bytes: int = 32
     http_timeout: Duration = timedelta(seconds=10)
+    mcp_oauth_client_id: str = "tramplin-fastmcp"
+    mcp_oauth_client_secret: SecretStr = SecretStr("")
+    mcp_oauth_redirect_uri: str = "http://localhost:8001/auth/callback"
+    mcp_oauth_request_ttl: Duration = timedelta(minutes=10)
+    mcp_oauth_code_ttl: Duration = timedelta(minutes=2)
 
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: SecretStr = SecretStr("")
