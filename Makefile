@@ -24,6 +24,7 @@ revision:
 
 lint:
 	uv run ruff check src tests scripts alembic
+	uv run ruff format --check src tests scripts alembic
 
 format:
 	uv run ruff format src tests scripts alembic
