@@ -42,9 +42,7 @@ def position_unique(table: str, parent: str) -> UniqueConstraint:
 class Track(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "tracks"
     __table_args__ = (
-        Index(
-            "uq_tracks_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")
-        ),
+        Index("uq_tracks_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")),
     )
 
     title: Mapped[str] = mapped_column(String(200))
@@ -63,9 +61,7 @@ class Track(UUIDPrimaryKey, SoftDeleteMixin):
 class Course(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "courses"
     __table_args__ = (
-        Index(
-            "uq_courses_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")
-        ),
+        Index("uq_courses_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")),
     )
 
     title: Mapped[str] = mapped_column(String(200))
