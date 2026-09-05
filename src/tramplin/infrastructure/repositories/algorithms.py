@@ -29,7 +29,14 @@ _DIFFICULTY_ORDER = case(
 
 class AlgorithmRepository(Repository):
     async def list_problems(self) -> list[AlgorithmProblem]:
-        stmt = select(AlgorithmProblem).order_by(AlgorithmProblem.created_at.desc())
+        stmt = (
+            select(AlgorithmProblem)
+            .order_by(AlgorithmProblem.created_at.desc())
+            .options(
+                selectinload(AlgorithmProblem.test_cases),
+                selectinload(AlgorithmProblem.templates),
+            )
+        )
         return list(await self._session.scalars(stmt))
 
     async def get_problem(
