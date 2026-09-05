@@ -164,6 +164,7 @@ deploy-stage:
   environment:
     name: staging
     url: "$STAGE_URL"
+  resource_group: staging
   rules:
     - if: '$CI_COMMIT_BRANCH == "stage"'
 
@@ -176,6 +177,9 @@ deploy-production:
   environment:
     name: production
     url: "$PROD_URL"
+  # Два деплоя подряд гоняли docker compose up на одном сервере параллельно
+  # и словили конфликт имён контейнеров — resource_group ставит второй в очередь.
+  resource_group: production
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
