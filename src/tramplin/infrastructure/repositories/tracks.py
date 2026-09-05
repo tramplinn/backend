@@ -18,6 +18,9 @@ class TrackRepository(Repository):
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),
+                selectinload(Track.courses)
+                .selectinload(TrackCourse.course)
+                .selectinload(Course.tags),
             )
         )
         if published_only:
@@ -32,6 +35,9 @@ class TrackRepository(Repository):
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),
+                selectinload(Track.courses)
+                .selectinload(TrackCourse.course)
+                .selectinload(Course.tags),
             )
         )
         return (await self._session.scalars(stmt)).one_or_none()
@@ -48,6 +54,9 @@ class TrackRepository(Repository):
                 selectinload(Track.courses)
                 .selectinload(TrackCourse.course)
                 .selectinload(Course.cover_asset),
+                selectinload(Track.courses)
+                .selectinload(TrackCourse.course)
+                .selectinload(Course.tags),
             )
         )
         if published_only:
