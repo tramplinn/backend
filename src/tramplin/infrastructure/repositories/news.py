@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.enums import ContentStatus
 from tramplin.models.news import News, NewsPhoto
 
@@ -44,4 +45,4 @@ class NewsRepository(Repository):
         return news
 
     async def delete(self, news: News) -> None:
-        await self._session.delete(news)
+        soft_delete(news)

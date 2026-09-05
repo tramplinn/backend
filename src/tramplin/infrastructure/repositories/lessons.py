@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.content import Course, InterviewCard, Lesson, Module
 from tramplin.models.enums import ContentStatus
 
@@ -36,7 +37,7 @@ class LessonRepository(Repository):
         return lesson
 
     async def delete(self, lesson: Lesson) -> None:
-        await self._session.delete(lesson)
+        soft_delete(lesson)
 
     async def list_interview_cards(self, lesson_id: uuid.UUID) -> list[InterviewCard]:
         stmt = (

@@ -11,10 +11,11 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import Base, UUIDPrimaryKey
+from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
 from tramplin.models.enums import ContentStatus
 
 if TYPE_CHECKING:
@@ -38,13 +39,18 @@ def position_unique(table: str, parent: str) -> UniqueConstraint:
     )
 
 
-class Track(UUIDPrimaryKey):
+class Track(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "tracks"
+    __table_args__ = (
+        Index(
+            "uq_tracks_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")
+        ),
+    )
 
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text())
     color: Mapped[str | None] = mapped_column(String(16))
-    slug: Mapped[str] = mapped_column(String(120), unique=True)
+    slug: Mapped[str] = mapped_column(String(120))
     status: Mapped[ContentStatus] = status_column()
 
     courses: Mapped[list[TrackCourse]] = relationship(
@@ -54,12 +60,17 @@ class Track(UUIDPrimaryKey):
     )
 
 
-class Course(UUIDPrimaryKey):
+class Course(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "courses"
+    __table_args__ = (
+        Index(
+            "uq_courses_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")
+        ),
+    )
 
     title: Mapped[str] = mapped_column(String(200))
     summary: Mapped[str | None] = mapped_column(Text())
-    slug: Mapped[str] = mapped_column(String(120), unique=True)
+    slug: Mapped[str] = mapped_column(String(120))
     color: Mapped[str | None] = mapped_column(String(16))
     est_hours: Mapped[int | None] = mapped_column(SmallInteger())
     cover_asset_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -98,10 +109,16 @@ class TrackCourse(Base):
     course: Mapped[Course] = relationship(back_populates="tracks")
 
 
-class Module(UUIDPrimaryKey):
+class Module(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "modules"
     __table_args__ = (
-        UniqueConstraint("course_id", "slug", name="uq_modules_course_id_slug"),
+        Index(
+            "uq_modules_course_id_slug",
+            "course_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("NOT is_deleted"),
+        ),
         position_unique("modules", "course_id"),
         UniqueConstraint("id", "course_id", name="uq_modules_id_course_id"),
     )
@@ -198,10 +215,16 @@ class ModuleDep(Base):
     depends_on: Mapped[Module] = relationship(foreign_keys=[depends_on_id])
 
 
-class Lesson(UUIDPrimaryKey):
+class Lesson(UUIDPrimaryKey, SoftDeleteMixin):
     __tablename__ = "lessons"
     __table_args__ = (
-        UniqueConstraint("module_id", "slug", name="uq_lessons_module_id_slug"),
+        Index(
+            "uq_lessons_module_id_slug",
+            "module_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("NOT is_deleted"),
+        ),
         UniqueConstraint("id", "module_id", name="uq_lessons_id_module_id"),
     )
 

@@ -1,23 +1,26 @@
 from datetime import datetime
 
 import uuid_utils.compat as uuid
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tramplin.models.assets import Asset
-from tramplin.models.base import Base, UUIDPrimaryKey
+from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
 from tramplin.models.content import position_unique, status_column
 from tramplin.models.enums import ContentStatus
 
 
-class News(UUIDPrimaryKey):
+class News(UUIDPrimaryKey, SoftDeleteMixin):
     """Новость главной страницы. Лента строится по published_at, а не по created_at:
     порядок публикации задаёт редактор, а не момент, когда он завёл черновик."""
 
     __tablename__ = "news"
+    __table_args__ = (
+        Index("uq_news_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")),
+    )
 
     title: Mapped[str] = mapped_column(String(200))
-    slug: Mapped[str] = mapped_column(String(120), unique=True)
+    slug: Mapped[str] = mapped_column(String(120))
     summary: Mapped[str | None] = mapped_column(Text())
     body_md: Mapped[str] = mapped_column(Text(), default="")
     status: Mapped[ContentStatus] = status_column()

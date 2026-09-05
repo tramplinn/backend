@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.enums import FeedbackStatus
 from tramplin.models.feedback import Feedback, FeedbackAttachment
 
@@ -39,4 +40,4 @@ class FeedbackRepository(Repository):
         return feedback
 
     async def delete(self, feedback: Feedback) -> None:
-        await self._session.delete(feedback)
+        soft_delete(feedback)

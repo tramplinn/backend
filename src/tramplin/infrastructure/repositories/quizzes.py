@@ -3,6 +3,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.content import Course, Lesson, Module
 from tramplin.models.enums import ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
@@ -32,7 +33,7 @@ class QuizRepository(Repository):
         return quiz
 
     async def delete(self, quiz: Quiz) -> None:
-        await self._session.delete(quiz)
+        soft_delete(quiz)
 
     async def get_question(self, question_id: uuid.UUID) -> QuizQuestion | None:
         stmt = (

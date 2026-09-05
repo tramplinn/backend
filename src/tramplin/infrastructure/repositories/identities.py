@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.enums import IdentityProvider
 from tramplin.models.users import UserIdentity
 
@@ -40,4 +41,4 @@ class UserIdentityRepository(Repository):
         return identity
 
     async def delete(self, identity: UserIdentity) -> None:
-        await self._session.delete(identity)
+        soft_delete(identity)

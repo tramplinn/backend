@@ -1,9 +1,11 @@
 import uuid_utils.compat as uuid
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
+from tramplin.core.time import utc_now
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.content import Course, Module, ModuleItem
+from tramplin.models.base import soft_delete
+from tramplin.models.content import Course, Lesson, Module, ModuleItem
 from tramplin.models.enums import ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
 
@@ -50,4 +52,23 @@ class CourseRepository(Repository):
         return course
 
     async def delete(self, course: Course) -> None:
-        await self._session.delete(course)
+        # Каскад вручную: ORM cascade="delete-orphan" не срабатывает на выставление
+        # флага, а модули/уроки/тесты курса не должны остаться "живыми" сиротами.
+        soft_delete(course)
+        now = utc_now()
+        module_ids = select(Module.id).where(Module.course_id == course.id)
+        await self._session.execute(
+            update(Module)
+            .where(Module.course_id == course.id)
+            .values(is_deleted=True, deleted_at=now)
+        )
+        await self._session.execute(
+            update(Lesson)
+            .where(Lesson.module_id.in_(module_ids))
+            .values(is_deleted=True, deleted_at=now)
+        )
+        await self._session.execute(
+            update(Quiz)
+            .where(Quiz.module_id.in_(module_ids))
+            .values(is_deleted=True, deleted_at=now)
+        )

@@ -2,9 +2,10 @@ from collections.abc import Sequence
 from datetime import datetime
 
 import uuid_utils.compat as uuid
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
+from tramplin.core.time import utc_now
 from tramplin.infrastructure.repositories.base import Repository
 from tramplin.models.algorithms import (
     AlgorithmJobOutbox,
@@ -17,6 +18,7 @@ from tramplin.models.algorithms import (
     PracticeSet,
     PracticeSetProblem,
 )
+from tramplin.models.base import soft_delete
 from tramplin.models.enums import AlgorithmDifficulty, ContentStatus, SubmissionStatus
 from tramplin.models.users import User
 
@@ -110,17 +112,25 @@ class AlgorithmRepository(Repository):
         return problem
 
     async def delete_problem(self, problem: AlgorithmProblem) -> None:
-        await self._session.delete(problem)
+        soft_delete(problem)
+        await self._session.execute(
+            update(AlgorithmTestCase)
+            .where(AlgorithmTestCase.problem_id == problem.id)
+            .values(is_deleted=True, deleted_at=utc_now())
+        )
 
     async def get_test_case(self, case_id: uuid.UUID) -> AlgorithmTestCase | None:
-        return await self._session.get(AlgorithmTestCase, case_id)
+        # session.get() читает из identity map в обход глобального soft-delete
+        # фильтра, если объект уже был загружен раньше в этом же запросе.
+        case = await self._session.get(AlgorithmTestCase, case_id)
+        return None if case is None or case.is_deleted else case
 
     def add_test_case(self, case: AlgorithmTestCase) -> AlgorithmTestCase:
         self._session.add(case)
         return case
 
     async def delete_test_case(self, case: AlgorithmTestCase) -> None:
-        await self._session.delete(case)
+        soft_delete(case)
 
     async def get_template(self, problem_id: uuid.UUID, language: str) -> AlgorithmTemplate | None:
         return await self._session.get(AlgorithmTemplate, (problem_id, language))
@@ -162,7 +172,7 @@ class AlgorithmRepository(Repository):
         return practice_set
 
     async def delete_set(self, practice_set: PracticeSet) -> None:
-        await self._session.delete(practice_set)
+        soft_delete(practice_set)
 
     def add_set_problem(self, item: PracticeSetProblem) -> PracticeSetProblem:
         self._session.add(item)

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
+from tramplin.models.base import soft_delete
 from tramplin.models.content import Course, Track, TrackCourse
 from tramplin.models.enums import ContentStatus
 
@@ -59,7 +60,7 @@ class TrackRepository(Repository):
         return track
 
     async def delete(self, track: Track) -> None:
-        await self._session.delete(track)
+        soft_delete(track)
 
     async def get_course_link(
         self,
