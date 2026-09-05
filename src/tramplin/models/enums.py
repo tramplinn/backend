@@ -97,3 +97,8 @@ class AlgorithmProgressStatus(StrEnum):
     ATTEMPTED = "attempted"
     SOLVED = "solved"
     REVIEW = "review"
+
+
+class RecommendationEntityType(StrEnum):
+    COURSE = "course"
+    ALGORITHM_PROBLEM = "algorithm_problem"

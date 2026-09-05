@@ -32,6 +32,7 @@ from tramplin.models.feedback import Feedback, FeedbackAttachment
 from tramplin.models.news import News, NewsPhoto
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
+from tramplin.models.recommendations import EmbeddingJobOutbox
 from tramplin.models.users import RefreshToken, User, UserIdentity
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "Base",
     "ContentStatus",
     "Course",
+    "EmbeddingJobOutbox",
     "Feedback",
     "FeedbackAttachment",
     "FeedbackStatus",

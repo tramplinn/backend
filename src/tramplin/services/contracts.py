@@ -3,7 +3,7 @@ from typing import Literal, Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.models.enums import IdentityProvider
+from tramplin.models.enums import IdentityProvider, RecommendationEntityType
 
 StatePurpose = Literal["login", "link"]
 
@@ -98,3 +98,9 @@ class CodeRunner(Protocol):
 
 class SubmissionQueue(Protocol):
     async def publish(self, submission_id: uuid.UUID) -> None: ...
+
+
+class EmbeddingQueue(Protocol):
+    async def publish(
+        self, entity_type: RecommendationEntityType, entity_id: uuid.UUID
+    ) -> None: ...

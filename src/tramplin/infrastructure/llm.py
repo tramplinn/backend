@@ -72,6 +72,18 @@ class LlmClient:
         else:
             logger.warning("Модель %s: %s — %s", model, type(error).__name__, error.message)
 
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        """Эмбеддинги идемпотентны и не стримятся — без ретраев/фолбэков, как у чата."""
+        if not self._settings.embeddings_enabled:
+            raise ServiceUnavailableError("Эмбеддинги не настроены")
+
+        response = await self._client.embeddings.create(
+            model=self._settings.embedding_model,
+            input=list(texts),
+            dimensions=self._settings.embedding_dimensions,
+        )
+        return [item.embedding for item in response.data]
+
     async def stream(self, prompt: ChatPrompt) -> AsyncIterator[str]:
         if not self._settings.llm_enabled:
             raise ServiceUnavailableError("Ассистент не настроен")

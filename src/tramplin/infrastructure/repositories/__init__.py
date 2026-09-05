@@ -10,6 +10,7 @@ from tramplin.infrastructure.repositories.modules import ModuleRepository
 from tramplin.infrastructure.repositories.news import NewsRepository
 from tramplin.infrastructure.repositories.quiz_attempts import QuizAttemptRepository
 from tramplin.infrastructure.repositories.quizzes import QuizRepository
+from tramplin.infrastructure.repositories.recommendations import RecommendationRepository
 from tramplin.infrastructure.repositories.refresh_tokens import RefreshTokenRepository
 from tramplin.infrastructure.repositories.tracks import TrackRepository
 from tramplin.infrastructure.repositories.users import UserRepository
@@ -25,6 +26,7 @@ __all__ = [
     "NewsRepository",
     "QuizAttemptRepository",
     "QuizRepository",
+    "RecommendationRepository",
     "RefreshTokenRepository",
     "Repository",
     "TrackRepository",

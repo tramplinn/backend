@@ -19,6 +19,7 @@ from tramplin.infrastructure.repositories import (
     NewsRepository,
     QuizAttemptRepository,
     QuizRepository,
+    RecommendationRepository,
     RefreshTokenRepository,
     TrackRepository,
     UserIdentityRepository,
@@ -45,6 +46,7 @@ from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAut
 from tramplin.services.progress import ProgressService
 from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
+from tramplin.services.recommendations import RecommendationService
 from tramplin.services.session import SessionService
 from tramplin.services.teacher_assistant import TeacherAssistantService
 from tramplin.services.tracks import TrackService
@@ -78,6 +80,7 @@ class RequestProvider(Provider):
     quiz_attempts = provide(QuizAttemptRepository)
     assets = provide(AssetRepository)
     algorithms = provide(AlgorithmRepository)
+    recommendations = provide(RecommendationRepository)
 
     @provide
     def session_service(
@@ -277,3 +280,12 @@ class RequestProvider(Provider):
         runner: CodeRunner,
     ) -> AlgorithmOperationsService:
         return AlgorithmOperationsService(algorithms, runner)
+
+    @provide
+    def recommendation_service(
+        self,
+        session: AsyncSession,
+        recommendations: RecommendationRepository,
+        settings: Settings,
+    ) -> RecommendationService:
+        return RecommendationService(session, recommendations, settings)

@@ -11,6 +11,7 @@ from tramplin.api.v1.feedback import router as feedback_router
 from tramplin.api.v1.health import router as health_router
 from tramplin.api.v1.learning import router as learning_router
 from tramplin.api.v1.news import router as news_router
+from tramplin.api.v1.recommendations import router as recommendations_router
 from tramplin.api.v1.tutor import router as tutor_router
 from tramplin.api.v1.users import router as users_router
 
@@ -28,5 +29,6 @@ api_router.include_router(feedback_admin_router)
 api_router.include_router(assets_router)
 api_router.include_router(tutor_router)
 api_router.include_router(algorithms_router)
+api_router.include_router(recommendations_router)
 
 __all__ = ["api_router"]

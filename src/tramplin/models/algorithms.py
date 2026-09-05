@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import uuid_utils.compat as uuid
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
@@ -28,6 +29,7 @@ from tramplin.models.enums import (
     SubmissionKind,
     SubmissionStatus,
 )
+from tramplin.models.recommendations import EMBEDDING_DIM
 
 
 class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
@@ -54,6 +56,7 @@ class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
     time_limit_ms: Mapped[int] = mapped_column(Integer(), default=1000)
     memory_limit_kb: Mapped[int] = mapped_column(Integer(), default=262144)
     status: Mapped[ContentStatus] = status_column()
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 
     test_cases: Mapped[list[AlgorithmTestCase]] = relationship(
         back_populates="problem",

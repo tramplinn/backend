@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 import uuid_utils.compat as uuid
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
@@ -13,10 +14,12 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
 from tramplin.models.enums import ContentStatus
+from tramplin.models.recommendations import EMBEDDING_DIM
 
 if TYPE_CHECKING:
     from tramplin.models.algorithms import PracticeSet
@@ -74,6 +77,8 @@ class Course(UUIDPrimaryKey, SoftDeleteMixin):
         index=True,
     )
     status: Mapped[ContentStatus] = status_column()
+    topics: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 
     cover_asset: Mapped[Asset | None] = relationship()
     modules: Mapped[list[Module]] = relationship(

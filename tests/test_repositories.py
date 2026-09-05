@@ -12,6 +12,7 @@ from tramplin.infrastructure.repositories import (
     NewsRepository,
     QuizAttemptRepository,
     QuizRepository,
+    RecommendationRepository,
     RefreshTokenRepository,
     TrackRepository,
     UserIdentityRepository,
@@ -50,6 +51,7 @@ from tramplin.models.enums import (
     PracticeMode,
     PracticeSessionStatus,
     QuestionType,
+    RecommendationEntityType,
     SubmissionKind,
     SubmissionStatus,
     UserRole,
@@ -57,6 +59,7 @@ from tramplin.models.enums import (
 from tramplin.models.news import News
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
+from tramplin.models.recommendations import EmbeddingJobOutbox
 from tramplin.models.users import RefreshToken, User, UserIdentity
 
 
@@ -427,3 +430,64 @@ async def test_track_and_user_repositories() -> None:
     assert await users.get_with_identities(user.id) is user
     assert await users.login_exists("user")
     assert users.add(user) is user
+
+
+async def test_recommendation_repository_queries_and_mutations() -> None:
+    user_id = new_id()
+    problem = AlgorithmProblem(
+        provider=AlgorithmProvider.INTERNAL,
+        external_key=None,
+        external_url=None,
+        title="Problem",
+        statement_md="S",
+        statement_html="<p>S</p>",
+        difficulty=AlgorithmDifficulty.EASY,
+        topics=["графы"],
+        time_limit_ms=1000,
+        memory_limit_kb=262144,
+        status=ContentStatus.PUBLISHED,
+    )
+    course = Course(
+        title="Course",
+        summary="S",
+        slug="course",
+        color=None,
+        est_hours=10,
+        status=ContentStatus.PUBLISHED,
+        topics=["графы"],
+    )
+    job = EmbeddingJobOutbox(
+        entity_type=RecommendationEntityType.ALGORITHM_PROBLEM,
+        entity_id=problem.id,
+        dispatched_at=None,
+        attempts=0,
+        last_error=None,
+    )
+    session = session_with(problem, total=1)
+    repository = RecommendationRepository(session)
+
+    session.scalars.return_value = ScalarResultFake([problem])
+    assert await repository.candidate_algorithm_problems(user_id) == [problem]
+    assert await repository.engaged_algorithm_signal(user_id) == [problem]
+
+    session.scalars.return_value = ScalarResultFake([course])
+    assert await repository.candidate_courses(user_id) == [course]
+    assert await repository.engaged_course_signal(user_id) == [course]
+
+    session.scalars.return_value = ScalarResultFake([job])
+    assert await repository.claim_embedding_job() is job
+
+    session.get.return_value = problem
+    assert await repository.get_algorithm_problem(problem.id) is problem
+    session.get.return_value = course
+    assert await repository.get_course(course.id) is course
+
+    await repository.enqueue_embedding_jobs([])
+    session.execute.assert_not_called()
+    await repository.enqueue_embedding_jobs(
+        [(RecommendationEntityType.ALGORITHM_PROBLEM, problem.id)]
+    )
+    await repository.set_embedding(
+        RecommendationEntityType.ALGORITHM_PROBLEM, problem.id, [0.1, 0.2]
+    )
+    assert session.execute.await_count == 2
