@@ -38,6 +38,7 @@ from tramplin.models.enums import (
     SubmissionKind,
     SubmissionStatus,
 )
+from tramplin.models.tags import Tag
 from tramplin.services.algorithm_execution import (
     CaseResult,
     bounded_output,
@@ -68,6 +69,7 @@ from tramplin.services.entity_updates import (
 )
 from tramplin.services.lesson_markdown import render_markdown
 from tramplin.services.modules import next_module_item
+from tramplin.services.tags import TagRepositoryPort
 
 
 class AlgorithmAuthoringService:
@@ -78,12 +80,14 @@ class AlgorithmAuthoringService:
         modules: AlgorithmModuleRepositoryPort,
         runner: CodeRunner,
         settings: Settings,
+        tags: TagRepositoryPort,
     ) -> None:
         self._transaction = transaction
         self._algorithms = algorithms
         self._modules = modules
         self._runner = runner
         self._settings = settings
+        self._tags = tags
 
     async def get_problem(self, problem_id: uuid.UUID) -> AlgorithmProblem:
         return require(
@@ -95,12 +99,13 @@ class AlgorithmAuthoringService:
         return await self._algorithms.list_problems()
 
     async def create_problem(
-        self, problem: AlgorithmProblem, actor_id: uuid.UUID
+        self, problem: AlgorithmProblem, tag_names: list[str], actor_id: uuid.UUID
     ) -> AlgorithmProblem:
         publishing = problem.status is ContentStatus.PUBLISHED
         _validate_problem_source(problem, require_statement=publishing)
         problem.statement_html = render_markdown(problem.statement_md)
         problem.test_cases, problem.templates = [], []
+        problem.tags = await self._tags.get_or_create_many(tag_names)
         mark_created(problem, actor_id)
         self._algorithms.add_problem(problem)
         await self._transaction.commit()
@@ -117,6 +122,8 @@ class AlgorithmAuthoringService:
             raise ConflictError("Сначала верните задачу в черновик")
         if "statement_md" in changes:
             changes["statement_html"] = render_markdown(changes["statement_md"])
+        if "tags" in changes:
+            problem.tags = await self._tags.get_or_create_many(changes.pop("tags"))
         validate_required_updates(changes, {"title", "difficulty", "status"})
         problem.provider = changes.get("provider", problem.provider)
         problem.external_key = changes.get("external_key", problem.external_key)
@@ -125,7 +132,6 @@ class AlgorithmAuthoringService:
         problem.statement_md = changes.get("statement_md", problem.statement_md)
         problem.statement_html = changes.get("statement_html", problem.statement_html)
         problem.difficulty = changes.get("difficulty", problem.difficulty)
-        problem.topics = changes.get("topics", problem.topics)
         problem.time_limit_ms = changes.get("time_limit_ms", problem.time_limit_ms)
         problem.memory_limit_kb = changes.get("memory_limit_kb", problem.memory_limit_kb)
         problem.status = changes.get("status", problem.status)
@@ -381,7 +387,7 @@ class ProblemCatalog:
     """Каталог тренажёра: задачи вместе с прогрессом текущего пользователя."""
 
     items: list[tuple[AlgorithmProblem, AlgorithmProgress | None]]
-    topics: list[str]
+    tags: list[Tag]
     total: int
 
 
@@ -407,19 +413,19 @@ class AlgorithmPracticeService:
         user_id: uuid.UUID,
         *,
         difficulty: AlgorithmDifficulty | None = None,
-        topic: str | None = None,
+        tag_id: uuid.UUID | None = None,
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> ProblemCatalog:
         problems, total = await self._algorithms.list_published_problems(
-            difficulty=difficulty, topic=topic, query=query, limit=limit, offset=offset
+            difficulty=difficulty, tag_id=tag_id, query=query, limit=limit, offset=offset
         )
         progress = await self._algorithms.progress_map(user_id, [item.id for item in problems])
-        topics = await self._algorithms.published_topics()
+        tags = await self._algorithms.published_tags()
         return ProblemCatalog(
             items=[(problem, progress.get(problem.id)) for problem in problems],
-            topics=topics,
+            tags=tags,
             total=total,
         )
 
@@ -801,6 +807,10 @@ class AlgorithmWorkerService:
         if submission.verdict is AlgorithmVerdict.ACCEPTED:
             progress.status = AlgorithmProgressStatus.SOLVED
             progress.first_solved_at = progress.first_solved_at or submission.finished_at
+            # Только последнее принятое решение: не архив попыток, а то, что подставить
+            # при следующем открытии задачи.
+            progress.last_solution_language = submission.language
+            progress.last_solution_code = submission.source_code
         elif progress.status is AlgorithmProgressStatus.UNSEEN:
             progress.status = AlgorithmProgressStatus.ATTEMPTED
         submission.progress_counted = True
@@ -826,6 +836,8 @@ def _new_progress(
         confidence=confidence,
         complexity_md=complexity_md,
         reflection_md=reflection_md,
+        last_solution_language=None,
+        last_solution_code=None,
         last_counted_submission_id=None,
     )
 

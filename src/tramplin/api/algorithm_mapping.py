@@ -11,6 +11,7 @@ from tramplin.api.schemas.algorithms import (
     TemplateStudentOut,
     TestCaseOut,
 )
+from tramplin.api.tag_mapping import tags_out
 from tramplin.models.algorithms import (
     AlgorithmProblem,
     AlgorithmProgress,
@@ -30,7 +31,7 @@ def problem_author_out(problem: AlgorithmProblem) -> ProblemAuthorOut:
         statement_md=problem.statement_md,
         statement_html=problem.statement_html,
         difficulty=problem.difficulty,
-        topics=problem.topics,
+        tags=tags_out(problem.tags),
         time_limit_ms=problem.time_limit_ms,
         memory_limit_kb=problem.memory_limit_kb,
         status=problem.status,
@@ -48,7 +49,7 @@ def problem_out(problem: AlgorithmProblem) -> ProblemOut:
         title=problem.title,
         statement_html=problem.statement_html,
         difficulty=problem.difficulty,
-        topics=problem.topics,
+        tags=tags_out(problem.tags),
         time_limit_ms=problem.time_limit_ms,
         memory_limit_kb=problem.memory_limit_kb,
         samples=[
@@ -66,7 +67,7 @@ def problem_card_out(
         id=problem.id,
         title=problem.title,
         difficulty=problem.difficulty,
-        topics=problem.topics,
+        tags=tags_out(problem.tags),
         provider=problem.provider,
         external_url=problem.external_url,
         languages=[template.language for template in problem.templates],

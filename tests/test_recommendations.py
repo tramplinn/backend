@@ -11,6 +11,7 @@ from tramplin.models.base import new_id
 from tramplin.models.content import Course
 from tramplin.models.enums import AlgorithmDifficulty, ContentStatus, RecommendationEntityType
 from tramplin.models.recommendations import EmbeddingJobOutbox
+from tramplin.models.tags import Tag
 from tramplin.services import recommendations as module
 from tramplin.services.recommendations import (
     EmbeddingDispatchService,
@@ -20,7 +21,7 @@ from tramplin.services.recommendations import (
 
 
 def _problem(
-    *, topics: list[str], embedding: list[float] | None = None, days_old: int = 0
+    *, tags: list[str], embedding: list[float] | None = None, days_old: int = 0
 ) -> AlgorithmProblem:
     problem = AlgorithmProblem(
         provider="internal",
@@ -30,19 +31,17 @@ def _problem(
         statement_md="условие",
         statement_html="<p>условие</p>",
         difficulty=AlgorithmDifficulty.EASY,
-        topics=topics,
         time_limit_ms=1000,
         memory_limit_kb=262144,
         status=ContentStatus.PUBLISHED,
     )
+    problem.tags = [Tag(name=name) for name in tags]
     problem.embedding = embedding
     problem.created_at = utc_now() - timedelta(days=days_old)
     return problem
 
 
-def _course(
-    *, topics: list[str], embedding: list[float] | None = None, days_old: int = 0
-) -> Course:
+def _course(*, tags: list[str], embedding: list[float] | None = None, days_old: int = 0) -> Course:
     course = Course(
         title="Курс",
         summary="описание",
@@ -50,8 +49,8 @@ def _course(
         color=None,
         est_hours=5,
         status=ContentStatus.PUBLISHED,
-        topics=topics,
     )
+    course.tags = [Tag(name=name) for name in tags]
     course.embedding = embedding
     course.created_at = utc_now() - timedelta(days=days_old)
     return course
@@ -172,7 +171,7 @@ def test_novelty_decays_linearly_and_clamps() -> None:
 def test_score_renormalizes_weight_when_embedding_missing() -> None:
     from collections import Counter
 
-    item = _problem(topics=["a"])
+    item = _problem(tags=["a"])
     user_topics = Counter({"a": 1})
     # без эмбеддинга у профиля/кандидата — весь вес embed уходит в overlap
     score = module._score(item, user_topics, None)
@@ -191,11 +190,11 @@ async def test_list_for_returns_empty_for_guest() -> None:
 async def test_list_for_ranks_candidates_above_threshold() -> None:
     from tramplin.models.users import User
 
-    matching = _problem(topics=["графы"], days_old=1)
-    unrelated = _problem(topics=["строки"], days_old=1000)
+    matching = _problem(tags=["графы"], days_old=1)
+    unrelated = _problem(tags=["строки"], days_old=1000)
     repo = RecommendationsFake(
         candidate_algorithms=[matching, unrelated],
-        engaged_algorithms=[_problem(topics=["графы"], days_old=5)],
+        engaged_algorithms=[_problem(tags=["графы"], days_old=5)],
     )
     session = SessionFake()
     service = RecommendationService(session, repo, _settings())
@@ -209,8 +208,8 @@ async def test_list_for_ranks_candidates_above_threshold() -> None:
 async def test_list_for_cold_start_ranks_by_novelty_without_threshold() -> None:
     from tramplin.models.users import User
 
-    old = _problem(topics=[], days_old=1000)
-    fresh = _problem(topics=[], days_old=0)
+    old = _problem(tags=[], days_old=1000)
+    fresh = _problem(tags=[], days_old=0)
     repo = RecommendationsFake(candidate_algorithms=[old, fresh])
     service = RecommendationService(SessionFake(), repo, _settings())
     user = User(login="u", role="student", is_active=True)
@@ -223,7 +222,7 @@ async def test_list_for_cold_start_ranks_by_novelty_without_threshold() -> None:
 async def test_list_for_enqueues_missing_embeddings_only_when_enabled() -> None:
     from tramplin.models.users import User
 
-    problem = _problem(topics=["графы"])
+    problem = _problem(tags=["графы"])
     repo = RecommendationsFake(candidate_algorithms=[problem])
     session = SessionFake()
     user = User(login="u", role="student", is_active=True)
@@ -267,7 +266,7 @@ async def test_embedding_dispatch_service_dispatches_once() -> None:
 
 
 async def test_embedding_worker_service_embeds_and_stores() -> None:
-    problem = _problem(topics=["графы"])
+    problem = _problem(tags=["графы"])
     repo = RecommendationsFake()
     repo.problems[problem.id] = problem
     llm = LlmFake([[0.1, 0.2, 0.3]])

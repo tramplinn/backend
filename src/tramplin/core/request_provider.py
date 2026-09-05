@@ -22,6 +22,7 @@ from tramplin.infrastructure.repositories import (
     QuizRepository,
     RecommendationRepository,
     RefreshTokenRepository,
+    TagRepository,
     TrackRepository,
     UserIdentityRepository,
     UserRepository,
@@ -51,6 +52,7 @@ from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
 from tramplin.services.recommendations import RecommendationService
 from tramplin.services.session import SessionService
+from tramplin.services.tags import TagService
 from tramplin.services.teacher_assistant import TeacherAssistantService
 from tramplin.services.tracks import TrackService
 from tramplin.services.tutor import TutorService
@@ -85,6 +87,7 @@ class RequestProvider(Provider):
     algorithms = provide(AlgorithmRepository)
     recommendations = provide(RecommendationRepository)
     mcp_oauth = provide(McpOAuthRepository)
+    tags = provide(TagRepository)
 
     @provide
     def session_service(
@@ -171,8 +174,13 @@ class RequestProvider(Provider):
         session: AsyncSession,
         courses: CourseRepository,
         assets: AssetRepository,
+        tags: TagRepository,
     ) -> CourseService:
-        return CourseService(session, courses, assets)
+        return CourseService(session, courses, assets, tags)
+
+    @provide
+    def tag_service(self, tags: TagRepository) -> TagService:
+        return TagService(tags)
 
     @provide
     def module_service(
@@ -228,10 +236,11 @@ class RequestProvider(Provider):
     def tutor_service(
         self,
         lessons: LessonService,
+        algorithms: AlgorithmPracticeService,
         quota: TutorQuota,
         settings: Settings,
     ) -> TutorService:
-        return TutorService(lessons, quota, settings)
+        return TutorService(lessons, algorithms, quota, settings)
 
     @provide
     def teacher_assistant_service(
@@ -277,8 +286,9 @@ class RequestProvider(Provider):
         modules: ModuleRepository,
         runner: CodeRunner,
         settings: Settings,
+        tags: TagRepository,
     ) -> AlgorithmAuthoringService:
-        return AlgorithmAuthoringService(session, algorithms, modules, runner, settings)
+        return AlgorithmAuthoringService(session, algorithms, modules, runner, settings, tags)
 
     @provide
     def algorithm_practice_service(

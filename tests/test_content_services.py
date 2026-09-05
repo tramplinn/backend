@@ -59,12 +59,13 @@ async def test_course_service_crud_and_not_found() -> None:
         delete_cascade=AsyncMock(),
     )
     assets = dependency(get=AsyncMock(return_value=None))
-    service = CourseService(session, repository, assets)
+    tags = dependency(get_or_create_many=AsyncMock(return_value=[]))
+    service = CourseService(session, repository, assets, tags)
     actor = new_id()
 
     assert await service.list(published_only=False) == [course]
     assert await service.get("title", published_only=False) is course
-    assert await service.create(course, actor) is course
+    assert await service.create(course, [], actor) is course
     assert await service.update(course.id, {"title": "Updated"}, actor) is course
     await service.delete(course.id)
     assert course.title == "Updated"
@@ -87,7 +88,8 @@ async def test_course_cover_must_reference_an_image_asset() -> None:
     session = FakeSession()
     repository = dependency(get=AsyncMock(return_value=course))
     assets = dependency(get=AsyncMock(return_value=image))
-    service = CourseService(session, repository, assets)
+    tags = dependency(get_or_create_many=AsyncMock(return_value=[]))
+    service = CourseService(session, repository, assets, tags)
     actor = new_id()
 
     result = await service.update(course.id, {"cover_asset_id": image.id}, actor)

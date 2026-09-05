@@ -12,14 +12,20 @@ from tramplin.models.quizzes import Quiz, QuizQuestion
 
 class CourseRepository(Repository):
     async def list(self, *, published_only: bool) -> list[Course]:
-        stmt = select(Course).options(selectinload(Course.cover_asset)).order_by(Course.title)
+        stmt = (
+            select(Course)
+            .options(selectinload(Course.cover_asset), selectinload(Course.tags))
+            .order_by(Course.title)
+        )
         if published_only:
             stmt = stmt.where(Course.status == ContentStatus.PUBLISHED)
         return list(await self._session.scalars(stmt))
 
     async def get(self, course_id: uuid.UUID) -> Course | None:
         stmt = (
-            select(Course).where(Course.id == course_id).options(selectinload(Course.cover_asset))
+            select(Course)
+            .where(Course.id == course_id)
+            .options(selectinload(Course.cover_asset), selectinload(Course.tags))
         )
         return (await self._session.scalars(stmt)).one_or_none()
 
@@ -29,6 +35,7 @@ class CourseRepository(Repository):
             .where(Course.slug == slug)
             .options(
                 selectinload(Course.cover_asset),
+                selectinload(Course.tags),
                 selectinload(Course.modules)
                 .selectinload(Module.items)
                 .selectinload(ModuleItem.lesson),
@@ -41,6 +48,9 @@ class CourseRepository(Repository):
                 .selectinload(ModuleItem.quiz)
                 .selectinload(Quiz.questions)
                 .selectinload(QuizQuestion.attachments),
+                selectinload(Course.modules)
+                .selectinload(Module.items)
+                .selectinload(ModuleItem.practice_set),
             )
         )
         if published_only:

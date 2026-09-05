@@ -8,13 +8,6 @@ from tramplin.models.enums import RecommendationEntityType
 from tramplin.models.recommendations import EmbeddingJobOutbox
 
 
-class EngagedSignal(Protocol):
-    """Темы и (опционально) эмбеддинг одной вовлечённой сущности — для профиля интереса."""
-
-    topics: list[str]
-    embedding: list[float] | None
-
-
 class RecommendationRepositoryPort(Protocol):
     async def candidate_algorithm_problems(self, user_id: uuid.UUID) -> list[AlgorithmProblem]: ...
 

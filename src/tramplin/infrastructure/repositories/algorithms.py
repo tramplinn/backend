@@ -17,9 +17,11 @@ from tramplin.models.algorithms import (
     PracticeSession,
     PracticeSet,
     PracticeSetProblem,
+    algorithm_problem_tags,
 )
 from tramplin.models.base import soft_delete
 from tramplin.models.enums import AlgorithmDifficulty, ContentStatus, SubmissionStatus
+from tramplin.models.tags import Tag
 from tramplin.models.users import User
 
 _DIFFICULTY_ORDER = case(
@@ -37,6 +39,7 @@ class AlgorithmRepository(Repository):
             .options(
                 selectinload(AlgorithmProblem.test_cases),
                 selectinload(AlgorithmProblem.templates),
+                selectinload(AlgorithmProblem.tags),
             )
         )
         return list(await self._session.scalars(stmt))
@@ -50,6 +53,7 @@ class AlgorithmRepository(Repository):
             .options(
                 selectinload(AlgorithmProblem.test_cases),
                 selectinload(AlgorithmProblem.templates),
+                selectinload(AlgorithmProblem.tags),
             )
         )
         if published_only:
@@ -60,7 +64,7 @@ class AlgorithmRepository(Repository):
         self,
         *,
         difficulty: AlgorithmDifficulty | None,
-        topic: str | None,
+        tag_id: uuid.UUID | None,
         query: str | None,
         limit: int,
         offset: int,
@@ -68,8 +72,8 @@ class AlgorithmRepository(Repository):
         filters = [AlgorithmProblem.status == ContentStatus.PUBLISHED]
         if difficulty is not None:
             filters.append(AlgorithmProblem.difficulty == difficulty)
-        if topic:
-            filters.append(AlgorithmProblem.topics.contains([topic]))
+        if tag_id is not None:
+            filters.append(AlgorithmProblem.tags.any(Tag.id == tag_id))
         if query:
             filters.append(AlgorithmProblem.title.ilike(f"%{query}%"))
 
@@ -79,20 +83,21 @@ class AlgorithmRepository(Repository):
         stmt = (
             select(AlgorithmProblem)
             .where(*filters)
-            .options(selectinload(AlgorithmProblem.templates))
+            .options(selectinload(AlgorithmProblem.templates), selectinload(AlgorithmProblem.tags))
             .order_by(_DIFFICULTY_ORDER, AlgorithmProblem.title)
             .limit(limit)
             .offset(offset)
         )
         return list(await self._session.scalars(stmt)), int(total or 0)
 
-    async def published_topics(self) -> list[str]:
-        topic = func.unnest(AlgorithmProblem.topics).label("topic")
+    async def published_tags(self) -> list[Tag]:
         stmt = (
-            select(topic)
+            select(Tag)
+            .join(algorithm_problem_tags, Tag.id == algorithm_problem_tags.c.tag_id)
+            .join(AlgorithmProblem, AlgorithmProblem.id == algorithm_problem_tags.c.problem_id)
             .where(AlgorithmProblem.status == ContentStatus.PUBLISHED)
             .distinct()
-            .order_by(topic)
+            .order_by(Tag.name)
         )
         return list(await self._session.scalars(stmt))
 

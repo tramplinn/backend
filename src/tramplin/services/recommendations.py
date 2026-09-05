@@ -30,10 +30,20 @@ _TOP_N = 5
 _STATEMENT_CHARS = 4000
 
 
+class _HasTag(Protocol):
+    name: str
+
+
 class _HasSignal(Protocol):
-    topics: list[str]
+    @property
+    def tags(self) -> Sequence[_HasTag]: ...
+
     embedding: list[float] | None
     created_at: datetime
+
+
+def _tag_names(item: _HasSignal) -> list[str]:
+    return [tag.name for tag in item.tags]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +55,7 @@ class Recommendations:
 def _topic_counts(items: Sequence[_HasSignal]) -> Counter[str]:
     counts: Counter[str] = Counter()
     for item in items:
-        counts.update(item.topics)
+        counts.update(_tag_names(item))
     return counts
 
 
@@ -86,7 +96,7 @@ def _score(
 ) -> float:
     """Перенормировка: нет эмбеддинга у кандидата/профиля — его вес уходит в overlap,
     иначе отсутствие ещё не посчитанного эмбеддинга искусственно занижало бы скор."""
-    overlap = _jaccard(user_topics.keys(), item.topics)
+    overlap = _jaccard(user_topics.keys(), _tag_names(item))
     novelty = _novelty(item.created_at)
     cosine = _cosine(user_embedding, item.embedding)
     if cosine is None:
@@ -181,15 +191,15 @@ class EmbeddingDispatchService:
 
 def _algorithm_text(problem: AlgorithmProblem) -> str:
     parts = [problem.title, problem.statement_md[:_STATEMENT_CHARS]]
-    if problem.topics:
-        parts.append("темы: " + ", ".join(problem.topics))
+    if problem.tags:
+        parts.append("темы: " + ", ".join(_tag_names(problem)))
     return "\n".join(parts)
 
 
 def _course_text(course: Course) -> str:
     parts = [course.title, course.summary or ""]
-    if course.topics:
-        parts.append("темы: " + ", ".join(course.topics))
+    if course.tags:
+        parts.append("темы: " + ", ".join(_tag_names(course)))
     return "\n".join(parts)
 
 

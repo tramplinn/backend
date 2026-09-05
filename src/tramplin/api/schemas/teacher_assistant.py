@@ -11,7 +11,7 @@ class AuthoringDocumentIn(ApiModel):
     body_md: str | None = Field(default=None, max_length=50000)
     statement_md: str | None = Field(default=None, max_length=50000)
     difficulty: Literal["easy", "medium", "hard"] | None = None
-    topics: list[str] | None = Field(default=None, max_length=20)
+    tags: list[str] | None = Field(default=None, max_length=20)
     time_limit_ms: int | None = Field(default=None, ge=50, le=5000)
     memory_limit_kb: int | None = Field(default=None, ge=16384, le=524288)
 

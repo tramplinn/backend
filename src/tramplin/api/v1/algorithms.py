@@ -24,6 +24,7 @@ from tramplin.api.schemas.algorithms import (
     SubmissionCreate,
     SubmissionOut,
 )
+from tramplin.api.tag_mapping import tag_out
 from tramplin.models.enums import AlgorithmDifficulty, SubmissionKind
 from tramplin.services.algorithms import AlgorithmPracticeService
 from tramplin.services.contracts import CodeRunner
@@ -36,17 +37,17 @@ async def list_catalog(
     user: CurrentUser,
     service: FromDishka[AlgorithmPracticeService],
     difficulty: AlgorithmDifficulty | None = None,
-    topic: Annotated[str | None, Query(max_length=64)] = None,
+    tag_id: uuid.UUID | None = None,
     query: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ProblemCatalogOut:
     catalog = await service.list_catalog(
-        user.id, difficulty=difficulty, topic=topic, query=query, limit=limit, offset=offset
+        user.id, difficulty=difficulty, tag_id=tag_id, query=query, limit=limit, offset=offset
     )
     return ProblemCatalogOut(
         items=[problem_card_out(problem, progress) for problem, progress in catalog.items],
-        topics=catalog.topics,
+        tags=[tag_out(tag) for tag in catalog.tags],
         total=catalog.total,
     )
 

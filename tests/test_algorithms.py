@@ -45,6 +45,7 @@ from tramplin.models.enums import (
     SubmissionKind,
     SubmissionStatus,
 )
+from tramplin.models.tags import Tag
 from tramplin.services.algorithm_execution import bounded_output
 from tramplin.services.algorithms import (
     AlgorithmAuthoringService,
@@ -103,7 +104,7 @@ class AlgorithmsFake:
         self,
         *,
         difficulty: AlgorithmDifficulty | None,
-        topic: str | None,
+        tag_id: Any | None,
         query: str | None,
         limit: int,
         offset: int,
@@ -113,20 +114,18 @@ class AlgorithmsFake:
             for problem in self.problems.values()
             if problem.status is ContentStatus.PUBLISHED
             and (difficulty is None or problem.difficulty is difficulty)
-            and (not topic or topic in problem.topics)
+            and (tag_id is None or tag_id in {tag.id for tag in problem.tags})
             and (not query or query.lower() in problem.title.lower())
         ]
         return items[offset : offset + limit], len(items)
 
-    async def published_topics(self) -> list[str]:
-        return sorted(
-            {
-                topic
-                for problem in self.problems.values()
-                if problem.status is ContentStatus.PUBLISHED
-                for topic in problem.topics
-            }
-        )
+    async def published_tags(self) -> list[Tag]:
+        seen: dict[Any, Tag] = {}
+        for problem in self.problems.values():
+            if problem.status is ContentStatus.PUBLISHED:
+                for tag in problem.tags:
+                    seen[tag.id] = tag
+        return sorted(seen.values(), key=lambda tag: tag.name)
 
     async def progress_map(
         self, user_id: Any, problem_ids: Sequence[Any]
@@ -284,12 +283,38 @@ class ModulesFake:
         return item
 
 
+class TagsFake:
+    def __init__(self) -> None:
+        self.by_key: dict[str, Tag] = {}
+
+    async def list_all(self) -> list[Tag]:
+        return sorted(self.by_key.values(), key=lambda tag: tag.name)
+
+    async def get_or_create_many(self, names: Sequence[str]) -> list[Tag]:
+        resolved: list[Tag] = []
+        seen: set[str] = set()
+        for raw in names:
+            name = raw.strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            tag = self.by_key.get(key)
+            if tag is None:
+                tag = Tag(name=name)
+                self.by_key[key] = tag
+            resolved.append(tag)
+        return resolved
+
+
 def problem(
     *,
     status: ContentStatus = ContentStatus.DRAFT,
     provider: AlgorithmProvider = AlgorithmProvider.INTERNAL,
 ) -> AlgorithmProblem:
-    return AlgorithmProblem(
+    prob = AlgorithmProblem(
         provider=provider,
         external_key=None,
         external_url=None,
@@ -297,11 +322,12 @@ def problem(
         statement_md="# Solve",
         statement_html="",
         difficulty=AlgorithmDifficulty.EASY,
-        topics=["arrays"],
         time_limit_ms=1000,
         memory_limit_kb=262144,
         status=status,
     )
+    prob.tags = [Tag(name="arrays")]
+    return prob
 
 
 def published_course(
@@ -349,9 +375,9 @@ def published_course(
 
 async def test_authoring_problem_cases_templates_and_publication(settings: Any) -> None:
     tx, repo, modules, runner = TransactionFake(), AlgorithmsFake(), ModulesFake(), RunnerFake()
-    service = AlgorithmAuthoringService(tx, repo, modules, runner, settings)
+    service = AlgorithmAuthoringService(tx, repo, modules, runner, settings, TagsFake())
     actor = new_id()
-    task = await service.create_problem(problem(), actor)
+    task = await service.create_problem(problem(), ["arrays"], actor)
     assert task.statement_html.startswith("<h1>")
     assert await service.get_problem(task.id) is task
 
@@ -396,14 +422,19 @@ async def test_authoring_problem_cases_templates_and_publication(settings: Any) 
 async def test_authoring_rejects_invalid_problem_and_reference(settings: Any) -> None:
     repo = AlgorithmsFake()
     service = AlgorithmAuthoringService(
-        TransactionFake(), repo, ModulesFake(), RunnerFake([RunResult("wrong_answer")]), settings
+        TransactionFake(),
+        repo,
+        ModulesFake(),
+        RunnerFake([RunResult("wrong_answer")]),
+        settings,
+        TagsFake(),
     )
     actor = new_id()
     external = problem(provider=AlgorithmProvider.EXTERNAL)
     external.statement_md = ""
     with pytest.raises(InvalidAlgorithmProblemError, match="HTTPS"):
-        await service.create_problem(external, actor)
-    task = await service.create_problem(problem(), actor)
+        await service.create_problem(external, [], actor)
+    task = await service.create_problem(problem(), ["arrays"], actor)
     with pytest.raises(InvalidAlgorithmProblemError, match="публичный"):
         await service.update_problem(task.id, {"status": ContentStatus.PUBLISHED}, actor)
     task.status = ContentStatus.DRAFT
@@ -420,7 +451,9 @@ async def test_authoring_rejects_invalid_problem_and_reference(settings: Any) ->
 
 async def test_authoring_practice_set_and_order(settings: Any) -> None:
     repo, modules = AlgorithmsFake(), ModulesFake()
-    service = AlgorithmAuthoringService(TransactionFake(), repo, modules, RunnerFake(), settings)
+    service = AlgorithmAuthoringService(
+        TransactionFake(), repo, modules, RunnerFake(), settings, TagsFake()
+    )
     actor = new_id()
     practice_set = await service.create_set(
         modules.module.id,
@@ -486,7 +519,7 @@ async def test_catalog_lists_published_with_progress(settings: Any) -> None:
 
     catalog = await service.list_catalog(user)
     assert [item.id for item, _ in catalog.items] == [task.id]
-    assert catalog.topics == ["arrays"]
+    assert [tag.name for tag in catalog.tags] == ["arrays"]
     assert catalog.total == 1
     assert catalog.items[0][1] is None
 
@@ -517,7 +550,7 @@ async def test_catalog_filters(settings: Any) -> None:
     user = new_id()
 
     assert (await service.list_catalog(user, difficulty=AlgorithmDifficulty.HARD)).total == 0
-    assert (await service.list_catalog(user, topic="graphs")).total == 0
+    assert (await service.list_catalog(user, tag_id=new_id())).total == 0
     assert (await service.list_catalog(user, query="two")).items[0][0].id == task.id
     assert (await service.list_catalog(user, query="нет такой")).total == 0
 

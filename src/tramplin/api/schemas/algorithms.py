@@ -4,6 +4,7 @@ import uuid_utils.compat as uuid
 from pydantic import Field, HttpUrl
 
 from tramplin.api.schemas.base import ApiModel
+from tramplin.api.schemas.tags import TagOut
 from tramplin.models.enums import (
     AlgorithmDifficulty,
     AlgorithmProgressStatus,
@@ -26,7 +27,7 @@ class ProblemCreate(ApiModel):
     title: str = Field(min_length=1, max_length=200)
     statement_md: str = ""
     difficulty: AlgorithmDifficulty
-    topics: list[str] = Field(default_factory=list, max_length=30)
+    tags: list[str] = Field(default_factory=list, max_length=30)
     time_limit_ms: int = Field(default=1000, ge=50, le=5000)
     memory_limit_kb: int = Field(default=262144, ge=16384, le=524288)
     status: ContentStatus = ContentStatus.DRAFT
@@ -39,7 +40,7 @@ class ProblemUpdate(ApiModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     statement_md: str | None = None
     difficulty: AlgorithmDifficulty | None = None
-    topics: list[str] | None = Field(default=None, max_length=30)
+    tags: list[str] | None = Field(default=None, max_length=30)
     time_limit_ms: int | None = Field(default=None, ge=50, le=5000)
     memory_limit_kb: int | None = Field(default=None, ge=16384, le=524288)
     status: ContentStatus | None = None
@@ -95,7 +96,7 @@ class ProblemAuthorOut(ApiModel):
     statement_md: str
     statement_html: str
     difficulty: AlgorithmDifficulty
-    topics: list[str]
+    tags: list[TagOut]
     time_limit_ms: int
     memory_limit_kb: int
     status: ContentStatus
@@ -111,7 +112,7 @@ class ProblemOut(ApiModel):
     title: str
     statement_html: str
     difficulty: AlgorithmDifficulty
-    topics: list[str]
+    tags: list[TagOut]
     time_limit_ms: int
     memory_limit_kb: int
     samples: list[SampleCaseOut]
@@ -162,7 +163,7 @@ class ProblemCardOut(ApiModel):
     id: uuid.UUID
     title: str
     difficulty: AlgorithmDifficulty
-    topics: list[str]
+    tags: list[TagOut]
     provider: AlgorithmProvider
     external_url: str | None
     languages: list[str]
@@ -173,7 +174,7 @@ class ProblemCardOut(ApiModel):
 
 class ProblemCatalogOut(ApiModel):
     items: list[ProblemCardOut]
-    topics: list[str]
+    tags: list[TagOut]
     total: int
 
 
@@ -247,6 +248,8 @@ class ProgressOut(ReflectionUpdate):
     hints_used: int
     first_solved_at: datetime | None
     last_attempt_at: datetime | None
+    last_solution_language: str | None
+    last_solution_code: str | None
 
 
 class RunnerLanguageOut(ApiModel):

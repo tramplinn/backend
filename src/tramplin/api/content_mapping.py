@@ -16,6 +16,7 @@ from tramplin.api.schemas.quizzes import (
     QuizQuestionOut,
 )
 from tramplin.api.schemas.tracks import TrackCourseOut, TrackOut
+from tramplin.api.tag_mapping import tags_out
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, Lesson, Module, Track
 from tramplin.models.enums import ContentStatus
@@ -38,6 +39,7 @@ def course_out(course: Course, *, asset_base_url: str) -> CourseOut:
             else None
         ),
         status=course.status,
+        tags=tags_out(course.tags),
     )
 
 

@@ -1,4 +1,5 @@
 from tramplin.api.schemas.recommendations import RecommendedAlgorithmOut, RecommendedCourseOut
+from tramplin.api.tag_mapping import tags_out
 from tramplin.models.algorithms import AlgorithmProblem
 from tramplin.models.content import Course
 
@@ -10,7 +11,7 @@ def recommended_course_out(course: Course) -> RecommendedCourseOut:
         title=course.title,
         summary=course.summary,
         est_hours=course.est_hours,
-        topics=course.topics,
+        tags=tags_out(course.tags),
     )
 
 
@@ -19,5 +20,5 @@ def recommended_algorithm_out(problem: AlgorithmProblem) -> RecommendedAlgorithm
         id=problem.id,
         title=problem.title,
         difficulty=problem.difficulty,
-        topics=problem.topics,
+        tags=tags_out(problem.tags),
     )

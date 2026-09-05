@@ -39,8 +39,9 @@ async def create_problem(
 ) -> ProblemAuthorOut:
     data = payload.model_dump()
     data["external_url"] = str(data["external_url"]) if data["external_url"] else None
+    tag_names = data.pop("tags")
     problem = AlgorithmProblem(statement_html="", **data)
-    return problem_author_out(await service.create_problem(problem, user.id))
+    return problem_author_out(await service.create_problem(problem, tag_names, user.id))
 
 
 @router.get("/algorithm-problems/{problem_id}")

@@ -19,4 +19,4 @@ async def suggest(
         payload.instruction,
         payload.document.to_document(),
     )
-    return TeacherAssistantOut.model_validate(result)
+    return TeacherAssistantOut.model_validate(result.model_dump())

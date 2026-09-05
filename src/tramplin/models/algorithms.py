@@ -4,16 +4,18 @@ import uuid_utils.compat as uuid
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
+    Column,
     ForeignKey,
     Index,
     Integer,
     LargeBinary,
     SmallInteger,
     String,
+    Table,
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
@@ -30,6 +32,14 @@ from tramplin.models.enums import (
     SubmissionStatus,
 )
 from tramplin.models.recommendations import EMBEDDING_DIM
+from tramplin.models.tags import Tag
+
+algorithm_problem_tags = Table(
+    "algorithm_problem_tags",
+    Base.metadata,
+    Column("problem_id", ForeignKey("algorithm_problems.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
@@ -52,12 +62,12 @@ class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
     statement_md: Mapped[str] = mapped_column(Text(), default="")
     statement_html: Mapped[str] = mapped_column(Text(), default="")
     difficulty: Mapped[AlgorithmDifficulty]
-    topics: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
     time_limit_ms: Mapped[int] = mapped_column(Integer(), default=1000)
     memory_limit_kb: Mapped[int] = mapped_column(Integer(), default=262144)
     status: Mapped[ContentStatus] = status_column()
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 
+    tags: Mapped[list[Tag]] = relationship(secondary=algorithm_problem_tags, order_by="Tag.name")
     test_cases: Mapped[list[AlgorithmTestCase]] = relationship(
         back_populates="problem",
         cascade="all, delete-orphan",
@@ -214,6 +224,8 @@ class AlgorithmProgress(Base):
     confidence: Mapped[int | None] = mapped_column(SmallInteger())
     complexity_md: Mapped[str | None] = mapped_column(Text())
     reflection_md: Mapped[str | None] = mapped_column(Text())
+    last_solution_language: Mapped[str | None] = mapped_column(String(32))
+    last_solution_code: Mapped[str | None] = mapped_column(Text())
     last_counted_submission_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
             "algorithm_submissions.id",

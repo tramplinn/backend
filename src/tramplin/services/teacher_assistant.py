@@ -20,7 +20,7 @@ SYSTEM_PROMPT: Final = """\
 - Сохраняй Markdown и техническую точность. Не выдумывай источники, сроки и факты курса.
 - Меняй только нужные поля: остальные верни как null.
 - Для lesson доступны title и body_md.
-- Для algorithm_problem доступны title, statement_md, difficulty, topics, time_limit_ms,
+- Для algorithm_problem доступны title, statement_md, difficulty, tags, time_limit_ms,
   memory_limit_kb. Условие должно однозначно описывать ввод, вывод, ограничения и пример.
 - Не публикуй, не удаляй и не утверждай, что правки уже применены.
 - explanation — короткое объяснение результата для преподавателя.
@@ -33,7 +33,7 @@ class AuthoringDocument:
     body_md: str | None = None
     statement_md: str | None = None
     difficulty: Difficulty | None = None
-    topics: list[str] | None = None
+    tags: list[str] | None = None
     time_limit_ms: int | None = None
     memory_limit_kb: int | None = None
 
@@ -46,7 +46,7 @@ class AuthoringPatch(BaseModel):
     body_md: str | None = Field(default=None, max_length=50000)
     statement_md: str | None = Field(default=None, max_length=50000)
     difficulty: Difficulty | None = None
-    topics: list[str] | None = Field(default=None, max_length=20)
+    tags: list[str] | None = Field(default=None, max_length=20)
     time_limit_ms: int | None = Field(default=None, ge=50, le=5000)
     memory_limit_kb: int | None = Field(default=None, ge=16384, le=524288)
 
@@ -102,7 +102,7 @@ class TeacherAssistantService:
             for value in (
                 patch.statement_md,
                 patch.difficulty,
-                patch.topics,
+                patch.tags,
                 patch.time_limit_ms,
                 patch.memory_limit_kb,
             )

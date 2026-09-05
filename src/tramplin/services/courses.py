@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 import uuid_utils.compat as uuid
@@ -12,6 +13,7 @@ from tramplin.services.entity_updates import (
     require,
     validate_required_updates,
 )
+from tramplin.services.tags import TagRepositoryPort
 
 
 class CourseRepositoryPort(Protocol):
@@ -32,10 +34,12 @@ class CourseService:
         transaction: Transaction,
         courses: CourseRepositoryPort,
         assets: AssetRepositoryPort,
+        tags: TagRepositoryPort,
     ) -> None:
         self._transaction = transaction
         self._courses = courses
         self._assets = assets
+        self._tags = tags
 
     async def list(self, *, published_only: bool = True) -> list[Course]:
         return await self._courses.list(published_only=published_only)
@@ -46,10 +50,11 @@ class CourseService:
             NotFoundError("Курс не найден"),
         )
 
-    async def create(self, course: Course, actor_id: uuid.UUID) -> Course:
+    async def create(self, course: Course, tag_names: Sequence[str], actor_id: uuid.UUID) -> Course:
         course.cover_asset = await resolve_image_asset(
             self._assets, course.cover_asset_id, owner="курса"
         )
+        course.tags = await self._tags.get_or_create_many(tag_names)
         mark_created(course, actor_id)
         self._courses.add(course)
         await self._transaction.commit()
@@ -65,6 +70,8 @@ class CourseService:
                 self._assets, cover_asset_id, owner="курса"
             )
             course.cover_asset_id = cover_asset_id
+        if "tags" in changes:
+            course.tags = await self._tags.get_or_create_many(changes.pop("tags"))
         validate_required_updates(changes, {"title", "slug", "status"})
         course.title = changes.get("title", course.title)
         course.slug = changes.get("slug", course.slug)

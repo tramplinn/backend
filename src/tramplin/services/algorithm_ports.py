@@ -17,6 +17,7 @@ from tramplin.models.algorithms import (
 )
 from tramplin.models.content import Module, ModuleItem
 from tramplin.models.enums import AlgorithmDifficulty
+from tramplin.models.tags import Tag
 
 
 class AlgorithmAuthoringRepositoryPort(Protocol):
@@ -78,13 +79,13 @@ class AlgorithmPracticeRepositoryPort(Protocol):
         self,
         *,
         difficulty: AlgorithmDifficulty | None,
-        topic: str | None,
+        tag_id: uuid.UUID | None,
         query: str | None,
         limit: int,
         offset: int,
     ) -> tuple[list[AlgorithmProblem], int]: ...
 
-    async def published_topics(self) -> list[str]: ...
+    async def published_tags(self) -> list[Tag]: ...
 
     async def progress_map(
         self, user_id: uuid.UUID, problem_ids: Sequence[uuid.UUID]

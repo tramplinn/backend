@@ -51,8 +51,10 @@ async def create_course(
     courses: FromDishka[CourseService],
     settings: FromDishka[Settings],
 ) -> CourseOut:
+    data = payload.model_dump()
+    tag_names = data.pop("tags")
     return course_out(
-        await courses.create(Course(**payload.model_dump()), user.id),
+        await courses.create(Course(**data), tag_names, user.id),
         asset_base_url=settings.s3_public_base_url,
     )
 

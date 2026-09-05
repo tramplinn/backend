@@ -1,6 +1,7 @@
 import uuid_utils.compat as uuid
 from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmProgress
@@ -28,6 +29,7 @@ class RecommendationRepository(Repository):
                     AlgorithmProgress.status.not_in(_DONE_ALGORITHM_STATUSES),
                 )
             )
+            .options(selectinload(AlgorithmProblem.tags))
         )
         return list(await self._session.scalars(stmt))
 
@@ -42,6 +44,7 @@ class RecommendationRepository(Repository):
             select(Course)
             .where(Course.status == ContentStatus.PUBLISHED)
             .where(Course.id.not_in(started))
+            .options(selectinload(Course.tags))
         )
         return list(await self._session.scalars(stmt))
 
@@ -51,6 +54,7 @@ class RecommendationRepository(Repository):
             .join(AlgorithmProgress, AlgorithmProgress.problem_id == AlgorithmProblem.id)
             .where(AlgorithmProgress.user_id == user_id)
             .where(AlgorithmProgress.status == AlgorithmProgressStatus.SOLVED)
+            .options(selectinload(AlgorithmProblem.tags))
         )
         return list(await self._session.scalars(stmt))
 
@@ -62,6 +66,7 @@ class RecommendationRepository(Repository):
             .join(LessonProgress, LessonProgress.lesson_id == Lesson.id)
             .where(LessonProgress.user_id == user_id)
             .distinct()
+            .options(selectinload(Course.tags))
         )
         return list(await self._session.scalars(stmt))
 
@@ -93,10 +98,12 @@ class RecommendationRepository(Repository):
         return (await self._session.scalars(stmt)).one_or_none()
 
     async def get_algorithm_problem(self, problem_id: uuid.UUID) -> AlgorithmProblem | None:
-        return await self._session.get(AlgorithmProblem, problem_id)
+        return await self._session.get(
+            AlgorithmProblem, problem_id, options=[selectinload(AlgorithmProblem.tags)]
+        )
 
     async def get_course(self, course_id: uuid.UUID) -> Course | None:
-        return await self._session.get(Course, course_id)
+        return await self._session.get(Course, course_id, options=[selectinload(Course.tags)])
 
     async def set_embedding(
         self,

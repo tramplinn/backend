@@ -60,6 +60,7 @@ from tramplin.models.news import News
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.recommendations import EmbeddingJobOutbox
+from tramplin.models.tags import Tag
 from tramplin.models.users import RefreshToken, User, UserIdentity
 
 
@@ -239,7 +240,6 @@ async def test_algorithm_repository_queries_and_mutations() -> None:
         statement_md="S",
         statement_html="<p>S</p>",
         difficulty=AlgorithmDifficulty.EASY,
-        topics=[],
         time_limit_ms=1000,
         memory_limit_kb=262144,
         status=ContentStatus.PUBLISHED,
@@ -378,16 +378,17 @@ async def test_algorithm_repository_queries_and_mutations() -> None:
     session.scalars.return_value = ScalarResultFake([problem])
     assert await repository.list_published_problems(
         difficulty=AlgorithmDifficulty.EASY,
-        topic="arrays",
+        tag_id=new_id(),
         query="two",
         limit=10,
         offset=0,
     ) == ([problem], 1)
     assert await repository.list_published_problems(
-        difficulty=None, topic=None, query=None, limit=10, offset=0
+        difficulty=None, tag_id=None, query=None, limit=10, offset=0
     ) == ([problem], 1)
-    session.scalars.return_value = ScalarResultFake(["arrays"])
-    assert await repository.published_topics() == ["arrays"]
+    tag = Tag(name="arrays")
+    session.scalars.return_value = ScalarResultFake([tag])
+    assert await repository.published_tags() == [tag]
     session.scalars.return_value = ScalarResultFake([progress])
     assert await repository.progress_map(user_id, [problem.id]) == {problem.id: progress}
     assert await repository.progress_map(user_id, []) == {}
@@ -442,7 +443,6 @@ async def test_recommendation_repository_queries_and_mutations() -> None:
         statement_md="S",
         statement_html="<p>S</p>",
         difficulty=AlgorithmDifficulty.EASY,
-        topics=["графы"],
         time_limit_ms=1000,
         memory_limit_kb=262144,
         status=ContentStatus.PUBLISHED,
@@ -454,7 +454,6 @@ async def test_recommendation_repository_queries_and_mutations() -> None:
         color=None,
         est_hours=10,
         status=ContentStatus.PUBLISHED,
-        topics=["графы"],
     )
     job = EmbeddingJobOutbox(
         entity_type=RecommendationEntityType.ALGORITHM_PROBLEM,

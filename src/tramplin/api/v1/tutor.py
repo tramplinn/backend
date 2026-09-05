@@ -70,6 +70,27 @@ async def _events(client: LlmClient, prompt: ChatPrompt) -> AsyncGenerator[str]:
         yield _event({"done": True})
 
 
+def _asker(request: Request, user: OptionalUser) -> tuple[Asker, str]:
+    guest_id = request.cookies.get(GUEST_COOKIE_NAME) or str(uuid.uuid4())
+    asker = Asker(
+        guest_id=guest_id,
+        user_id=user.id if user else None,
+        ip=request.client.host if request.client else None,
+    )
+    return asker, guest_id
+
+
+def _stream(client: LlmClient, prompt: ChatPrompt, settings: Settings) -> StreamingResponse:
+    return StreamingResponse(
+        _with_heartbeat(_events(client, prompt), settings.llm_heartbeat.total_seconds()),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/lessons/{lesson_id}/messages")
 async def ask(
     lesson_id: uuid.UUID,
@@ -80,25 +101,35 @@ async def ask(
     client: FromDishka[LlmClient],
     settings: FromDishka[Settings],
 ) -> StreamingResponse:
-    guest_id = request.cookies.get(GUEST_COOKIE_NAME) or str(uuid.uuid4())
-    asker = Asker(
-        guest_id=guest_id,
-        user_id=user.id if user else None,
-        ip=request.client.host if request.client else None,
-    )
+    asker, guest_id = _asker(request, user)
     prompt = await tutor.prepare(
         asker,
         lesson_id,
         [ChatTurn(role=item.role, content=item.content) for item in payload.messages],
     )
-    response = StreamingResponse(
-        _with_heartbeat(_events(client, prompt), settings.llm_heartbeat.total_seconds()),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-store",
-            "X-Accel-Buffering": "no",
-        },
+    response = _stream(client, prompt, settings)
+    if user is None:
+        set_guest_cookie(response, settings, guest_id)
+    return response
+
+
+@router.post("/algorithm-problems/{problem_id}/messages")
+async def ask_about_problem(
+    problem_id: uuid.UUID,
+    payload: TutorAskIn,
+    request: Request,
+    user: OptionalUser,
+    tutor: FromDishka[TutorService],
+    client: FromDishka[LlmClient],
+    settings: FromDishka[Settings],
+) -> StreamingResponse:
+    asker, guest_id = _asker(request, user)
+    prompt = await tutor.prepare_for_problem(
+        asker,
+        problem_id,
+        [ChatTurn(role=item.role, content=item.content) for item in payload.messages],
     )
+    response = _stream(client, prompt, settings)
     if user is None:
         set_guest_cookie(response, settings, guest_id)
     return response

@@ -135,6 +135,7 @@ class LlmClient:
         )
         attempts = self._attempts()
         for index, model in enumerate(attempts):
+            last = index == len(attempts) - 1
             try:
                 response = await self._client.responses.parse(
                     model=model,
@@ -144,11 +145,14 @@ class LlmClient:
                     max_output_tokens=max_output_tokens,
                     store=False,
                 )
-                if response.output_parsed is None:
-                    raise ServiceUnavailableError("Ассистент не смог подготовить правки")
-                return response.output_parsed
             except openai.APIError as error:
                 self._log(model, error)
-                if index == len(attempts) - 1:
+                if last:
                     raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
+                continue
+            if response.output_parsed is not None:
+                return response.output_parsed
+            logger.warning("Модель %s: ответ не прошёл структурный разбор", model)
+            if last:
+                raise ServiceUnavailableError("Ассистент не смог подготовить правки")
         raise ServiceUnavailableError("Ассистент сейчас недоступен")
