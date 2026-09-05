@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-import tramplin.worker as worker
+import tramplin.algo_worker as worker
 from tramplin.core.config import Settings
 from tramplin.models.base import new_id
 
@@ -196,5 +196,5 @@ def test_worker_main_healthcheck(
 def test_worker_main_rejects_unknown_command(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["worker", "unknown"])
 
-    with pytest.raises(SystemExit, match=r"usage: python -m tramplin\.worker"):
+    with pytest.raises(SystemExit, match=r"usage: python -m tramplin\.algo_worker"):
         worker.main()

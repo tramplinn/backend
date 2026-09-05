@@ -23,6 +23,7 @@ dependencies = [
     "anyio>=4.14.2",
     "openai>=3.7.0",
     "faststream[rabbit]>=0.7.5",
+    "pgvector>=0.4.1",
 ]
 
 [dependency-groups]

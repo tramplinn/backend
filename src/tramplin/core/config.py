@@ -95,6 +95,16 @@ class Settings(DatabaseSettings):
     rabbitmq_url: str = "amqp://tramplin:tramplin@localhost:5672/"
     algorithm_queue_name: str = "algorithm-jobs"
 
+    # Пусто по умолчанию, как llm_model: провайдер за LLM_BASE_URL не обязан
+    # знать конкретно про text-embedding-3-small (не факт, что это OpenAI).
+    embedding_model: str = ""
+    embedding_dimensions: int = 512
+    embedding_queue_name: str = "embedding-jobs"
+
+    @property
+    def embeddings_enabled(self) -> bool:
+        return bool(self.embedding_model and self.llm_api_key.get_secret_value())
+
     @property
     def yandex_enabled(self) -> bool:
         return bool(self.yandex_client_id and self.yandex_client_secret.get_secret_value())
