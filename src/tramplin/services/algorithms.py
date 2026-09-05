@@ -567,6 +567,7 @@ class AlgorithmPracticeService:
         )
         mark_created(submission, user_id)
         self._algorithms.add_submission(submission)
+        await self._transaction.flush()
         self._algorithms.add_outbox(
             AlgorithmJobOutbox(
                 submission_id=submission.id,

@@ -58,12 +58,13 @@ from tramplin.services.contracts import RunnerJob, RunnerLanguage, RunRequest, R
 class TransactionFake:
     def __init__(self) -> None:
         self.commits = 0
+        self.flushes = 0
 
     async def commit(self) -> None:
         self.commits += 1
 
     async def flush(self) -> None:
-        pass
+        self.flushes += 1
 
 
 class RunnerFake:
@@ -905,3 +906,36 @@ async def test_transactional_outbox_dispatches_once() -> None:
     assert queue.messages == [submission_id]
     assert event.dispatched_at is not None and event.attempts == 1 and event.last_error is None
     assert not await dispatch.dispatch_next()
+
+
+def test_algorithm_job_outbox_uow_sort_order() -> None:
+    """SQLAlchemy UOW должен сохранять submission раньше outbox, чтобы не нарушать FK."""
+    from sqlalchemy.orm import Session, attributes
+    from sqlalchemy.orm.unitofwork import UOWTransaction
+    from sqlalchemy.util import topological
+
+    sess = Session()
+    sub = AlgorithmSubmission(
+        session_id=new_id(),
+        problem_id=new_id(),
+        user_id=new_id(),
+        kind=SubmissionKind.RUN,
+        language="python",
+        source_code="print(1)",
+        status=SubmissionStatus.QUEUED,
+        progress_counted=False,
+    )
+    outbox = AlgorithmJobOutbox(submission_id=sub.id, attempts=0)
+    sess.add(sub)
+    sess.add(outbox)
+
+    uow = UOWTransaction(sess)
+    for obj in (sub, outbox):
+        uow.register_object(attributes.instance_state(obj))
+
+    actions = sorted(uow._generate_actions(), key=lambda item: item.sort_key)  # type: ignore[no-untyped-call]
+    sorted_rec = list(topological.sort(uow.dependencies, actions))
+    save_actions = [rec for rec in sorted_rec if "SaveUpdate" in str(rec)]
+    assert len(save_actions) == 2
+    assert "AlgorithmSubmission" in str(save_actions[0])
+    assert "AlgorithmJobOutbox" in str(save_actions[1])

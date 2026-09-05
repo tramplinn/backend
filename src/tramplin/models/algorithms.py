@@ -235,6 +235,8 @@ class AlgorithmJobOutbox(Base):
     attempts: Mapped[int] = mapped_column(Integer(), default=0)
     last_error: Mapped[str | None] = mapped_column(Text())
 
+    submission: Mapped[AlgorithmSubmission] = relationship()
+
 
 Index("ix_algorithm_problems_status", AlgorithmProblem.status)
 Index("ix_algorithm_test_cases_problem_id", AlgorithmTestCase.problem_id)
