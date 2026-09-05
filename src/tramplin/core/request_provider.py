@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
 from tramplin.infrastructure.github import GitHubOAuthClient
+from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
@@ -45,6 +46,7 @@ from tramplin.services.progress import ProgressService
 from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
 from tramplin.services.session import SessionService
+from tramplin.services.teacher_assistant import TeacherAssistantService
 from tramplin.services.tracks import TrackService
 from tramplin.services.tutor import TutorService
 from tramplin.services.users import UserService
@@ -201,6 +203,14 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> TutorService:
         return TutorService(lessons, quota, settings)
+
+    @provide
+    def teacher_assistant_service(
+        self,
+        client: LlmClient,
+        settings: Settings,
+    ) -> TeacherAssistantService:
+        return TeacherAssistantService(client, settings)
 
     @provide
     def news_service(

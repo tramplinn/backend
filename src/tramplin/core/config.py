@@ -73,6 +73,8 @@ class Settings(DatabaseSettings):
     llm_guest_quota: int = 3
     llm_guest_ip_quota: int = 60
     llm_guest_daily_total: int = 300
+    llm_authoring_max_tokens: int = 4000
+    llm_authoring_input_max_chars: int = 50000
     guest_cookie_ttl: Duration = timedelta(days=30)
 
     s3_bucket: str = "tramplin"

@@ -1,16 +1,18 @@
 import logging
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TypeVar
 
 import openai
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionMessageParam
+from pydantic import BaseModel
 
 from tramplin.core.config import Settings
 from tramplin.core.errors import ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
+StructuredT = TypeVar("StructuredT", bound=BaseModel)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,3 +105,38 @@ class LlmClient:
                     raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
                 continue
             return
+
+    async def structured(
+        self,
+        prompt: ChatPrompt,
+        result_type: type[StructuredT],
+        *,
+        max_output_tokens: int,
+    ) -> StructuredT:
+        """Структурированный ответ для действий интерфейса, а не свободного чата."""
+        if not self._settings.llm_enabled:
+            raise ServiceUnavailableError("Ассистент не настроен")
+
+        input_text = "\n\n".join(
+            f"{('Пользователь' if turn.role == 'user' else 'Ассистент')}: {turn.content}"
+            for turn in prompt.turns
+        )
+        attempts = self._attempts()
+        for index, model in enumerate(attempts):
+            try:
+                response = await self._client.responses.parse(
+                    model=model,
+                    instructions=prompt.system,
+                    input=input_text,
+                    text_format=result_type,
+                    max_output_tokens=max_output_tokens,
+                    store=False,
+                )
+                if response.output_parsed is None:
+                    raise ServiceUnavailableError("Ассистент не смог подготовить правки")
+                return response.output_parsed
+            except openai.APIError as error:
+                self._log(model, error)
+                if index == len(attempts) - 1:
+                    raise ServiceUnavailableError("Ассистент сейчас недоступен") from error
+        raise ServiceUnavailableError("Ассистент сейчас недоступен")

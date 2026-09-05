@@ -9,6 +9,7 @@ from tramplin.api.v1 import (
     modules,
     news_authoring,
     quizzes,
+    teacher_assistant,
     tracks,
 )
 
@@ -20,5 +21,6 @@ router.include_router(lessons.router)
 router.include_router(quizzes.router)
 router.include_router(news_authoring.router)
 router.include_router(algorithm_authoring.router)
+router.include_router(teacher_assistant.router)
 
 __all__ = ["router"]
