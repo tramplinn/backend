@@ -1,5 +1,7 @@
 FROM python:3.14.7-alpine3.23
 
+RUN apk update && apk upgrade --no-cache
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
