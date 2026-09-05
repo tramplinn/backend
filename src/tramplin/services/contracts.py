@@ -11,6 +11,8 @@ StatePurpose = Literal["login", "link"]
 class Transaction(Protocol):
     async def commit(self) -> None: ...
 
+    async def flush(self) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class PageResult[T]:

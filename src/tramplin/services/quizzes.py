@@ -62,6 +62,10 @@ class QuizService:
         quiz.questions = []
         mark_created(quiz, actor_id)
         self._quizzes.add(quiz)
+        # ModuleItem.quiz — viewonly, ORM не строит по нему порядок flush: без явного
+        # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO quizzes и
+        # упасть на fk_module_items_quiz_id_module_id_quizzes.
+        await self._transaction.flush()
         await self._append_to_module(module_id, actor_id, quiz)
         await self._transaction.commit()
         return quiz

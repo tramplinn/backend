@@ -56,6 +56,10 @@ class LessonService:
         mark_created(lesson, actor_id)
         self._apply_rendered_content(lesson, await self.preview(lesson.body_md), actor_id)
         self._lessons.add(lesson)
+        # ModuleItem.lesson — viewonly, ORM не строит по нему порядок flush: без явного
+        # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO lessons и
+        # упасть на fk_module_items_lesson_id_module_id_lessons.
+        await self._transaction.flush()
         await self._append_to_module(module_id, actor_id, lesson_id=lesson.id)
         await self._transaction.commit()
         return lesson

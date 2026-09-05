@@ -271,6 +271,10 @@ class AlgorithmAuthoringService:
         practice_set.problems = []
         mark_created(practice_set, actor_id)
         self._algorithms.add_set(practice_set)
+        # ModuleItem.practice_set — viewonly, ORM не строит по нему порядок flush: без
+        # явного flush тут INSERT INTO module_items мог уйти раньше INSERT INTO
+        # practice_sets и упасть на FK-ограничении.
+        await self._transaction.flush()
         items = await self._modules.list_items(module_id)
         self._modules.add_item(
             next_module_item(

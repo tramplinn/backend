@@ -15,6 +15,9 @@ class AssetTransaction:
         if self.fail:
             raise RuntimeError("database unavailable")
 
+    async def flush(self) -> None:
+        pass
+
 
 class AssetRepositoryFake:
     def __init__(self) -> None:

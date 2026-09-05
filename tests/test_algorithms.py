@@ -62,6 +62,9 @@ class TransactionFake:
     async def commit(self) -> None:
         self.commits += 1
 
+    async def flush(self) -> None:
+        pass
+
 
 class RunnerFake:
     def __init__(self, results: list[RunResult] | None = None) -> None:

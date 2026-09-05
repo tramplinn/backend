@@ -14,6 +14,9 @@ class FakeSession:
     async def commit(self) -> None:
         self.commits += 1
 
+    async def flush(self) -> None:
+        pass
+
 
 class FakeUserRepository:
     def __init__(self) -> None:
