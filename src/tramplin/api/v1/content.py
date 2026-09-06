@@ -24,7 +24,11 @@ from tramplin.services.tracks import TrackService
 router = APIRouter(tags=["content"], route_class=DishkaRoute)
 
 
-@router.get("/tracks")
+@router.get(
+    "/tracks",
+    summary="Список треков",
+    description="Публичный каталог опубликованных треков.",
+)
 async def list_tracks(
     tracks: FromDishka[TrackService],
     settings: FromDishka[Settings],
@@ -39,7 +43,11 @@ async def list_tracks(
     ]
 
 
-@router.get("/tracks/{slug}")
+@router.get(
+    "/tracks/{slug}",
+    summary="Трек по slug",
+    description="Публичная карточка трека со списком его опубликованных курсов.",
+)
 async def get_track(
     slug: str,
     tracks: FromDishka[TrackService],
@@ -52,7 +60,11 @@ async def get_track(
     )
 
 
-@router.get("/courses")
+@router.get(
+    "/courses",
+    summary="Список курсов",
+    description="Публичный каталог опубликованных курсов.",
+)
 async def list_courses(
     courses: FromDishka[CourseService],
     settings: FromDishka[Settings],
@@ -63,7 +75,11 @@ async def list_courses(
     ]
 
 
-@router.get("/courses/{slug}")
+@router.get(
+    "/courses/{slug}",
+    summary="Курс по slug",
+    description="Публичное дерево курса: только опубликованные модули и уроки.",
+)
 async def get_course(
     slug: str,
     courses: FromDishka[CourseService],
@@ -76,7 +92,11 @@ async def get_course(
     )
 
 
-@router.get("/courses/{slug}/module-dependencies")
+@router.get(
+    "/courses/{slug}/module-dependencies",
+    summary="Зависимости модулей курса",
+    description="Рёбра графа доступности между опубликованными модулями курса.",
+)
 async def list_module_dependencies(
     slug: str,
     modules: FromDishka[ModuleService],
@@ -87,12 +107,20 @@ async def list_module_dependencies(
     ]
 
 
-@router.get("/lessons/{lesson_id}")
+@router.get(
+    "/lessons/{lesson_id}",
+    summary="Урок по id",
+    description="Публичный урок; черновики доступны только через authoring-роут.",
+)
 async def get_lesson(lesson_id: uuid.UUID, lessons: FromDishka[LessonService]) -> LessonOut:
     return lesson_out(await lessons.get(lesson_id))
 
 
-@router.get("/lessons/{lesson_id}/interview-cards")
+@router.get(
+    "/lessons/{lesson_id}/interview-cards",
+    summary="Карточки для собеседований урока",
+    description="Вопросы-карточки, извлечённые из содержимого урока.",
+)
 async def list_interview_cards(
     lesson_id: uuid.UUID,
     lessons: FromDishka[LessonService],
@@ -103,7 +131,11 @@ async def list_interview_cards(
     ]
 
 
-@router.get("/quizzes/{quiz_id}")
+@router.get(
+    "/quizzes/{quiz_id}",
+    summary="Тест по id",
+    description="Публичный тест с вопросами, но без правильных ответов.",
+)
 async def get_quiz(
     quiz_id: uuid.UUID,
     quizzes: FromDishka[QuizService],

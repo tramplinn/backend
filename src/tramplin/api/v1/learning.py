@@ -17,7 +17,11 @@ from tramplin.services.quiz_attempts import QuizAttemptService
 router = APIRouter(tags=["learning"], route_class=DishkaRoute)
 
 
-@router.get("/courses/{slug}/progress")
+@router.get(
+    "/courses/{slug}/progress",
+    summary="Прогресс по курсу",
+    description="Сводка прохождения уроков и тестов текущим пользователем в курсе.",
+)
 async def get_course_progress(
     slug: str,
     user: CurrentUser,
@@ -26,7 +30,11 @@ async def get_course_progress(
     return CourseProgressOut.model_validate(await progress.course(user.id, slug))
 
 
-@router.get("/progress/lessons")
+@router.get(
+    "/progress/lessons",
+    summary="Прогресс по урокам",
+    description="Все пройденные уроки текущего пользователя, без привязки к курсу.",
+)
 async def list_lesson_progress(
     user: CurrentUser,
     progress: FromDishka[ProgressService],
@@ -34,7 +42,11 @@ async def list_lesson_progress(
     return [LessonProgressOut.model_validate(item) for item in await progress.lessons(user.id)]
 
 
-@router.get("/progress/quizzes")
+@router.get(
+    "/progress/quizzes",
+    summary="Прогресс по тестам",
+    description="Лучшие попытки текущего пользователя по всем пройденным тестам.",
+)
 async def list_quiz_progress(
     user: CurrentUser,
     progress: FromDishka[ProgressService],
@@ -42,7 +54,11 @@ async def list_quiz_progress(
     return [QuizProgressOut.model_validate(item) for item in await progress.quizzes(user.id)]
 
 
-@router.put("/progress/lessons/{lesson_id}")
+@router.put(
+    "/progress/lessons/{lesson_id}",
+    summary="Отметить урок пройденным",
+    description="Идемпотентно: повторный вызов не создаёт дублей прогресса.",
+)
 async def complete_lesson(
     lesson_id: uuid.UUID,
     user: CurrentUser,
@@ -51,7 +67,12 @@ async def complete_lesson(
     return LessonProgressOut.model_validate(await progress.complete(user.id, lesson_id))
 
 
-@router.delete("/progress/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/progress/lessons/{lesson_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Снять отметку о прохождении урока",
+    description="Возвращает урок в статус непройденного.",
+)
 async def reopen_lesson(
     lesson_id: uuid.UUID,
     user: CurrentUser,
@@ -60,7 +81,12 @@ async def reopen_lesson(
     await progress.reopen(user.id, lesson_id)
 
 
-@router.post("/quizzes/{quiz_id}/attempts", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/quizzes/{quiz_id}/attempts",
+    status_code=status.HTTP_201_CREATED,
+    summary="Отправить попытку прохождения теста",
+    description="Проверяет ответы, сохраняет попытку и возвращает результат по каждому вопросу.",
+)
 async def submit_quiz(
     quiz_id: uuid.UUID,
     payload: QuizAttemptCreate,
@@ -77,7 +103,11 @@ async def submit_quiz(
     )
 
 
-@router.get("/quizzes/{quiz_id}/attempts")
+@router.get(
+    "/quizzes/{quiz_id}/attempts",
+    summary="Попытки прохождения теста",
+    description="Все попытки текущего пользователя по тесту, от новых к старым.",
+)
 async def list_quiz_attempts(
     quiz_id: uuid.UUID,
     user: CurrentUser,

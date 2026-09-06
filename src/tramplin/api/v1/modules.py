@@ -20,7 +20,11 @@ from tramplin.services.modules import ModuleService
 router = APIRouter(tags=["authoring:modules"], route_class=DishkaRoute)
 
 
-@router.get("/courses/{slug}/module-dependencies")
+@router.get(
+    "/courses/{slug}/module-dependencies",
+    summary="Зависимости модулей курса (автор)",
+    description="Включает рёбра для черновиков модулей, в отличие от публичного роута.",
+)
 async def list_module_dependencies(
     slug: str,
     _: TeacherUser,
@@ -32,7 +36,12 @@ async def list_module_dependencies(
     ]
 
 
-@router.post("/courses/{course_id}/modules", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/courses/{course_id}/modules",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать модуль",
+    description="Добавляет модуль в конец курса как черновик.",
+)
 async def create_module(
     course_id: uuid.UUID,
     payload: ModuleCreate,
@@ -43,14 +52,17 @@ async def create_module(
     return ModuleOut.model_validate(await modules.create(course_id, module, user.id))
 
 
-@router.get("/modules/{module_id}")
+@router.get(
+    "/modules/{module_id}",
+    summary="Модуль по id",
+    description="Черновики видны: публичного роута для одного модуля нет вовсе.",
+)
 async def get_module(
     module_id: uuid.UUID,
     _: TeacherUser,
     modules: FromDishka[ModuleService],
     settings: FromDishka[Settings],
 ) -> ModuleTreeOut:
-    """Черновики видны: публичного роута для одного модуля нет вовсе."""
     return module_tree_out(
         await modules.get_tree(module_id),
         published_only=False,
@@ -58,7 +70,11 @@ async def get_module(
     )
 
 
-@router.patch("/modules/{module_id}")
+@router.patch(
+    "/modules/{module_id}",
+    summary="Изменить модуль",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_module(
     module_id: uuid.UUID,
     payload: ModuleUpdate,
@@ -72,6 +88,11 @@ async def update_module(
 @router.put(
     "/modules/{module_id}/dependencies/{depends_on_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Добавить зависимость модуля",
+    description=(
+        "Отмечает, что module_id открывается только после depends_on_id. "
+        "Отклоняется при попытке создать цикл или повторить существующую зависимость."
+    ),
 )
 async def add_module_dependency(
     module_id: uuid.UUID,
@@ -85,6 +106,8 @@ async def add_module_dependency(
 @router.delete(
     "/modules/{module_id}/dependencies/{depends_on_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить зависимость модуля",
+    description="Убирает связь module_id зависит от depends_on_id.",
 )
 async def remove_module_dependency(
     module_id: uuid.UUID,
@@ -95,7 +118,12 @@ async def remove_module_dependency(
     await modules.remove_dependency(module_id, depends_on_id)
 
 
-@router.put("/courses/{course_id}/modules/order", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/courses/{course_id}/modules/order",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать порядок модулей курса",
+    description="Полностью заменяет порядок: список должен содержать все id модулей курса.",
+)
 async def reorder_modules(
     course_id: uuid.UUID,
     payload: ItemsOrder,
@@ -105,7 +133,12 @@ async def reorder_modules(
     await modules.reorder(course_id, payload.ids, user.id)
 
 
-@router.put("/modules/{module_id}/order", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/modules/{module_id}/order",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать порядок содержимого модуля",
+    description="Порядок общей ленты уроков и тестов внутри модуля.",
+)
 async def reorder_module_content(
     module_id: uuid.UUID,
     payload: ModuleContentOrder,
@@ -119,7 +152,12 @@ async def reorder_module_content(
     )
 
 
-@router.delete("/modules/{module_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/modules/{module_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить модуль",
+    description="Безвозвратно удаляет модуль вместе с его уроками и тестами.",
+)
 async def delete_module(
     module_id: uuid.UUID,
     _: TeacherUser,

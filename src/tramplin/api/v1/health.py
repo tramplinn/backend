@@ -9,12 +9,20 @@ from tramplin.api.schemas.health import HealthOut
 router = APIRouter(tags=["health"], route_class=DishkaRoute)
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Проверка живости",
+    description="Отвечает без обращения к БД или Redis — используется для liveness-проб.",
+)
 async def health() -> HealthOut:
     return HealthOut(status="ok")
 
 
-@router.get("/health/ready")
+@router.get(
+    "/health/ready",
+    summary="Проверка готовности",
+    description="Проверяет доступность БД и Redis — используется для readiness-проб.",
+)
 async def readiness(session: FromDishka[AsyncSession], redis: FromDishka[Redis]) -> HealthOut:
     await session.execute(text("SELECT 1"))
     await redis.ping()

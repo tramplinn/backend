@@ -10,7 +10,14 @@ router = APIRouter(
 )
 
 
-@router.post("/suggest")
+@router.post(
+    "/suggest",
+    summary="Подсказка ИИ-ассистента автора",
+    description=(
+        "Генерирует черновик текста для указанной поверхности редактора на основе "
+        "инструкции автора и текущего содержимого документа."
+    ),
+)
 async def suggest(
     payload: TeacherAssistantIn,
     _: TeacherUser,

@@ -17,7 +17,11 @@ from tramplin.services.courses import CourseService
 router = APIRouter(tags=["authoring:courses"], route_class=DishkaRoute)
 
 
-@router.get("/courses")
+@router.get(
+    "/courses",
+    summary="Список курсов (автор)",
+    description="Все курсы, включая черновики, для авторской панели.",
+)
 async def list_courses(
     _: TeacherUser,
     courses: FromDishka[CourseService],
@@ -29,7 +33,11 @@ async def list_courses(
     ]
 
 
-@router.get("/courses/{slug}")
+@router.get(
+    "/courses/{slug}",
+    summary="Курс по slug (автор)",
+    description="Полное дерево курса вместе с черновиками модулей и уроков.",
+)
 async def get_course(
     slug: str,
     _: TeacherUser,
@@ -44,7 +52,12 @@ async def get_course(
     )
 
 
-@router.post("/courses", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/courses",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать курс",
+    description="Создаёт курс как черновик; теги указываются по имени и создаются при отсутствии.",
+)
 async def create_course(
     payload: CourseCreate,
     user: TeacherUser,
@@ -59,7 +72,11 @@ async def create_course(
     )
 
 
-@router.patch("/courses/{course_id}")
+@router.patch(
+    "/courses/{course_id}",
+    summary="Изменить курс",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_course(
     course_id: uuid.UUID,
     payload: CourseUpdate,
@@ -73,7 +90,12 @@ async def update_course(
     )
 
 
-@router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/courses/{course_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить курс",
+    description="Безвозвратно удаляет курс вместе с модулями и уроками.",
+)
 async def delete_course(
     course_id: uuid.UUID,
     _: TeacherUser,

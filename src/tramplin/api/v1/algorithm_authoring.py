@@ -25,7 +25,11 @@ from tramplin.services.algorithms import AlgorithmAuthoringService
 router = APIRouter(tags=["authoring:algorithms"], route_class=DishkaRoute)
 
 
-@router.get("/algorithms/problems")
+@router.get(
+    "/algorithms/problems",
+    summary="Список задач (автор)",
+    description="Все алгоритмические задачи, включая черновики, для авторской панели.",
+)
 async def list_problems(
     _: TeacherUser,
     service: FromDishka[AlgorithmAuthoringService],
@@ -33,7 +37,12 @@ async def list_problems(
     return [problem_author_out(item) for item in await service.list_problems()]
 
 
-@router.post("/algorithms/problems", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/algorithms/problems",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать задачу",
+    description="Создаёт задачу как черновик, без тестов и языковых шаблонов решения.",
+)
 async def create_problem(
     payload: ProblemCreate, user: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> ProblemAuthorOut:
@@ -44,14 +53,22 @@ async def create_problem(
     return problem_author_out(await service.create_problem(problem, tag_names, user.id))
 
 
-@router.get("/algorithms/problems/{problem_id}")
+@router.get(
+    "/algorithms/problems/{problem_id}",
+    summary="Задача по id (автор)",
+    description="Включает черновики, тесты и служебные поля, недоступные публично.",
+)
 async def get_problem(
     problem_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> ProblemAuthorOut:
     return problem_author_out(await service.get_problem(problem_id))
 
 
-@router.patch("/algorithms/problems/{problem_id}")
+@router.patch(
+    "/algorithms/problems/{problem_id}",
+    summary="Изменить задачу",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_problem(
     problem_id: uuid.UUID,
     payload: ProblemUpdate,
@@ -64,14 +81,24 @@ async def update_problem(
     return problem_author_out(await service.update_problem(problem_id, changes, user.id))
 
 
-@router.delete("/algorithms/problems/{problem_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/algorithms/problems/{problem_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить задачу",
+    description="Безвозвратно удаляет задачу вместе с тестами и шаблонами решений.",
+)
 async def delete_problem(
     problem_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> None:
     await service.delete_problem(problem_id)
 
 
-@router.post("/algorithms/problems/{problem_id}/test-cases", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/algorithms/problems/{problem_id}/test-cases",
+    status_code=status.HTTP_201_CREATED,
+    summary="Добавить тест-кейс",
+    description="Добавляет тест-кейс для проверки решений задачи.",
+)
 async def add_case(
     problem_id: uuid.UUID,
     payload: TestCaseCreate,
@@ -82,7 +109,11 @@ async def add_case(
     return TestCaseOut.model_validate(await service.add_case(problem_id, case, user.id))
 
 
-@router.patch("/algorithms/test-cases/{case_id}")
+@router.patch(
+    "/algorithms/test-cases/{case_id}",
+    summary="Изменить тест-кейс",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_case(
     case_id: uuid.UUID,
     payload: TestCaseUpdate,
@@ -94,14 +125,23 @@ async def update_case(
     )
 
 
-@router.delete("/algorithms/test-cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/algorithms/test-cases/{case_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить тест-кейс",
+    description="Безвозвратно удаляет тест-кейс задачи.",
+)
 async def delete_case(
     case_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> None:
     await service.delete_case(case_id)
 
 
-@router.put("/algorithms/problems/{problem_id}/templates/{language}")
+@router.put(
+    "/algorithms/problems/{problem_id}/templates/{language}",
+    summary="Задать шаблон решения для языка",
+    description="Заменяет стартовый код и эталонное решение задачи для указанного языка.",
+)
 async def put_template(
     problem_id: uuid.UUID,
     language: str,
@@ -120,7 +160,11 @@ async def put_template(
     )
 
 
-@router.post("/algorithms/problems/{problem_id}/templates/{language}/validate")
+@router.post(
+    "/algorithms/problems/{problem_id}/templates/{language}/validate",
+    summary="Проверить эталонное решение",
+    description="Прогоняет эталонное решение по всем тест-кейсам и проставляет validated_at.",
+)
 async def validate_template(
     problem_id: uuid.UUID,
     language: str,
@@ -135,6 +179,8 @@ async def validate_template(
 @router.delete(
     "/algorithms/problems/{problem_id}/templates/{language}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить шаблон решения для языка",
+    description="Убирает возможность решать задачу на этом языке.",
 )
 async def delete_template(
     problem_id: uuid.UUID,
@@ -145,7 +191,12 @@ async def delete_template(
     await service.delete_template(problem_id, language)
 
 
-@router.post("/modules/{module_id}/practice-sets", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/modules/{module_id}/practice-sets",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать набор практики",
+    description="Создаёт набор практики в модуле как черновик, без задач.",
+)
 async def create_set(
     module_id: uuid.UUID,
     payload: PracticeSetCreate,
@@ -157,14 +208,22 @@ async def create_set(
     )
 
 
-@router.get("/practice-sets/{set_id}")
+@router.get(
+    "/practice-sets/{set_id}",
+    summary="Набор практики по id (автор)",
+    description="Включает черновик набора и его задачи.",
+)
 async def get_set(
     set_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> PracticeSetOut:
     return set_out(await service.get_set(set_id))
 
 
-@router.get("/practice-sets")
+@router.get(
+    "/practice-sets",
+    summary="Список наборов практики (автор)",
+    description="Все наборы практики, включая черновики, для авторской панели.",
+)
 async def list_sets(
     _: TeacherUser,
     service: FromDishka[AlgorithmAuthoringService],
@@ -172,7 +231,11 @@ async def list_sets(
     return [set_out(item) for item in await service.list_sets()]
 
 
-@router.patch("/practice-sets/{set_id}")
+@router.patch(
+    "/practice-sets/{set_id}",
+    summary="Изменить набор практики",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_set(
     set_id: uuid.UUID,
     payload: PracticeSetUpdate,
@@ -184,7 +247,12 @@ async def update_set(
     )
 
 
-@router.delete("/practice-sets/{set_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/practice-sets/{set_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить набор практики",
+    description="Безвозвратно удаляет набор вместе со списком его задач.",
+)
 async def delete_set(
     set_id: uuid.UUID,
     _: TeacherUser,
@@ -193,7 +261,12 @@ async def delete_set(
     await service.delete_set(set_id)
 
 
-@router.post("/practice-sets/{set_id}/problems", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/practice-sets/{set_id}/problems",
+    status_code=status.HTTP_201_CREATED,
+    summary="Добавить задачу в набор",
+    description="Добавляет задачу в конец набора с рекомендованным временем на решение.",
+)
 async def add_set_problem(
     set_id: uuid.UUID,
     payload: SetProblemAdd,
@@ -204,7 +277,12 @@ async def add_set_problem(
     return set_out(await service.get_set(set_id))
 
 
-@router.put("/practice-sets/{set_id}/problems/order", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/practice-sets/{set_id}/problems/order",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать порядок задач в наборе",
+    description="Полностью заменяет порядок: список должен содержать все id задач набора.",
+)
 async def reorder_set(
     set_id: uuid.UUID,
     payload: ReorderProblems,
@@ -217,6 +295,8 @@ async def reorder_set(
 @router.delete(
     "/practice-sets/{set_id}/problems/{problem_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Убрать задачу из набора",
+    description="Убирает задачу из набора практики, не удаляя саму задачу.",
 )
 async def remove_set_problem(
     set_id: uuid.UUID,

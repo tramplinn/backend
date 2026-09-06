@@ -21,7 +21,15 @@ def _asset_out(stored: StoredAsset) -> AssetOut:
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Загрузить файл",
+    description=(
+        "Принимает multipart/form-data с полями file и mime; возвращает публичный "
+        "URL загруженного файла для использования в контенте курсов, новостей и т.д."
+    ),
+)
 async def upload_asset(
     file: Annotated[UploadFile, File()],
     mime: Annotated[AssetMime, Form()],

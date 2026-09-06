@@ -9,7 +9,14 @@ from tramplin.services.recommendations import RecommendationService
 router = APIRouter(tags=["recommendations"], route_class=DishkaRoute)
 
 
-@router.get("/recommendations")
+@router.get(
+    "/recommendations",
+    summary="Персональные рекомендации",
+    description=(
+        "Курсы и алгоритмические задачи, подобранные под прогресс текущего "
+        "пользователя; для гостя возвращает общую подборку."
+    ),
+)
 async def list_recommendations(
     user: OptionalUser,
     service: FromDishka[RecommendationService],

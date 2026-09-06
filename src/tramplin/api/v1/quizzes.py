@@ -20,7 +20,12 @@ from tramplin.services.quizzes import QuizService
 router = APIRouter(tags=["authoring:quizzes"], route_class=DishkaRoute)
 
 
-@router.post("/modules/{module_id}/quizzes", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/modules/{module_id}/quizzes",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать тест",
+    description="Создаёт тест в модуле как черновик, без вопросов.",
+)
 async def create_quiz(
     module_id: uuid.UUID,
     payload: QuizCreate,
@@ -35,7 +40,11 @@ async def create_quiz(
     )
 
 
-@router.patch("/quizzes/{quiz_id}")
+@router.patch(
+    "/quizzes/{quiz_id}",
+    summary="Изменить тест",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_quiz(
     quiz_id: uuid.UUID,
     payload: QuizUpdate,
@@ -47,7 +56,11 @@ async def update_quiz(
     return quiz_out(quiz, asset_base_url=settings.s3_public_base_url)
 
 
-@router.get("/quizzes/{quiz_id}")
+@router.get(
+    "/quizzes/{quiz_id}",
+    summary="Тест по id (автор)",
+    description="Включает правильные ответы и пояснения — в отличие от публичного роута.",
+)
 async def get_quiz(
     quiz_id: uuid.UUID,
     _: TeacherUser,
@@ -60,7 +73,12 @@ async def get_quiz(
     )
 
 
-@router.delete("/quizzes/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/quizzes/{quiz_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить тест",
+    description="Безвозвратно удаляет тест вместе с вопросами.",
+)
 async def delete_quiz(
     quiz_id: uuid.UUID,
     _: TeacherUser,
@@ -69,7 +87,12 @@ async def delete_quiz(
     await quizzes.delete(quiz_id)
 
 
-@router.post("/quizzes/{quiz_id}/questions", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/quizzes/{quiz_id}/questions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Добавить вопрос в тест",
+    description="Добавляет вопрос с вариантами ответа и вложениями в конец теста.",
+)
 async def create_question(
     quiz_id: uuid.UUID,
     payload: QuizQuestionCreate,
@@ -91,7 +114,11 @@ async def create_question(
     )
 
 
-@router.patch("/questions/{question_id}")
+@router.patch(
+    "/questions/{question_id}",
+    summary="Изменить вопрос теста",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_question(
     question_id: uuid.UUID,
     payload: QuizQuestionUpdate,
@@ -110,7 +137,12 @@ async def update_question(
     )
 
 
-@router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/questions/{question_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить вопрос теста",
+    description="Безвозвратно удаляет вопрос из теста.",
+)
 async def delete_question(
     question_id: uuid.UUID,
     _: TeacherUser,

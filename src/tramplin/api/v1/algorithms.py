@@ -34,7 +34,11 @@ from tramplin.services.contracts import CodeRunner
 router = APIRouter(tags=["algorithms"], route_class=DishkaRoute)
 
 
-@router.get("/algorithms/problems")
+@router.get(
+    "/algorithms/problems",
+    summary="Каталог алгоритмических задач",
+    description="Опубликованные задачи с фильтрами и прогрессом текущего пользователя.",
+)
 async def list_catalog(
     user: CurrentUser,
     service: FromDishka[AlgorithmPracticeService],
@@ -54,35 +58,57 @@ async def list_catalog(
     )
 
 
-@router.post("/practice-sessions", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/practice-sessions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Начать свободную тренировку",
+    description="Сессия вне набора практики — нужна для отправки решений из каталога.",
+)
 async def start_free_session(
     user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> PracticeSessionOut:
     return PracticeSessionOut.model_validate(await service.start_free_session(user.id))
 
 
-@router.get("/practice-sets/{set_id}")
+@router.get(
+    "/practice-sets/{set_id}",
+    summary="Набор практики по id",
+    description="Публичный набор практики (например, для mock-интервью).",
+)
 async def get_set(
     set_id: uuid.UUID, _: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> PracticeSetOut:
     return set_out(await service.get_set(set_id))
 
 
-@router.post("/practice-sets/{set_id}/sessions", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/practice-sets/{set_id}/sessions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Начать тренировку по набору",
+    description="Создаёт сессию прохождения указанного набора практики.",
+)
 async def start_session(
     set_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> PracticeSessionOut:
     return PracticeSessionOut.model_validate(await service.start_session(set_id, user.id))
 
 
-@router.get("/practice-sessions/{session_id}")
+@router.get(
+    "/practice-sessions/{session_id}",
+    summary="Сессия тренировки по id",
+    description="Статус и решённые задачи текущей сессии практики.",
+)
 async def get_session(
     session_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> PracticeSessionOut:
     return PracticeSessionOut.model_validate(await service.get_session(session_id, user.id))
 
 
-@router.post("/practice-sessions/{session_id}/complete")
+@router.post(
+    "/practice-sessions/{session_id}/complete",
+    summary="Завершить сессию тренировки",
+    description="Закрывает сессию и сохраняет итоговую рефлексию по ней.",
+)
 async def complete_session(
     session_id: uuid.UUID,
     payload: CompleteSession,
@@ -94,19 +120,32 @@ async def complete_session(
     )
 
 
-@router.get("/algorithms/problems/{problem_id}")
+@router.get(
+    "/algorithms/problems/{problem_id}",
+    summary="Алгоритмическая задача по id",
+    description="Условие опубликованной задачи для решения в тренажёре.",
+)
 async def get_problem(
     problem_id: uuid.UUID, _: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> ProblemOut:
     return problem_out(await service.get_problem(problem_id))
 
 
-@router.get("/algorithms/languages")
+@router.get(
+    "/algorithms/languages",
+    summary="Доступные языки для решения задач",
+    description="Языки, которые сейчас может запускать исполнитель кода.",
+)
 async def languages(_: CurrentUser, runner: FromDishka[CodeRunner]) -> list[RunnerLanguageOut]:
     return [RunnerLanguageOut.model_validate(language) for language in await runner.languages()]
 
 
-@router.post("/algorithms/problems/{problem_id}/runs", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/algorithms/problems/{problem_id}/runs",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Запустить код на кастомном вводе",
+    description="Ставит запуск в очередь исполнителя; результат не засчитывается как решение.",
+)
 async def run_code(
     problem_id: uuid.UUID,
     payload: RunCreate,
@@ -125,7 +164,12 @@ async def run_code(
     return submission_out(submission)
 
 
-@router.post("/algorithms/problems/{problem_id}/submissions", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/algorithms/problems/{problem_id}/submissions",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Отправить решение на проверку",
+    description="Ставит посылку в очередь исполнителя; засчитывается как попытка решения.",
+)
 async def submit_code(
     problem_id: uuid.UUID,
     payload: SubmissionCreate,
@@ -143,21 +187,33 @@ async def submit_code(
     return submission_out(submission)
 
 
-@router.get("/algorithms/submissions/{submission_id}")
+@router.get(
+    "/algorithms/submissions/{submission_id}",
+    summary="Статус запуска или посылки",
+    description="Опрашивается пока запуск/посылка не завершится (статус, вывод, вердикт).",
+)
 async def get_submission(
     submission_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> SubmissionOut:
     return submission_out(await service.get_submission(submission_id, user.id))
 
 
-@router.get("/algorithms/problems/{problem_id}/progress")
+@router.get(
+    "/algorithms/problems/{problem_id}/progress",
+    summary="Прогресс по задаче",
+    description="Статус решения задачи и рефлексия текущего пользователя.",
+)
 async def get_progress(
     problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> ProgressOut:
     return ProgressOut.model_validate(await service.get_progress(problem_id, user.id))
 
 
-@router.get("/algorithms/problems/{problem_id}/solutions")
+@router.get(
+    "/algorithms/problems/{problem_id}/solutions",
+    summary="Принятые решения по задаче",
+    description="Все принятые посылки текущего пользователя, от новых к старым.",
+)
 async def list_solutions(
     problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> list[SolutionOut]:
@@ -165,7 +221,11 @@ async def list_solutions(
     return [solution_out(solution) for solution in solutions]
 
 
-@router.put("/algorithms/problems/{problem_id}/reflection")
+@router.put(
+    "/algorithms/problems/{problem_id}/reflection",
+    summary="Сохранить рефлексию по задаче",
+    description="Заметки о сложности решения, уверенности и разборе задачи.",
+)
 async def update_reflection(
     problem_id: uuid.UUID,
     payload: ReflectionUpdate,

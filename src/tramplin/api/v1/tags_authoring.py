@@ -9,6 +9,10 @@ from tramplin.services.tags import TagService
 router = APIRouter(prefix="/tags", tags=["authoring:tags"], route_class=DishkaRoute)
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="Список тегов",
+    description="Общий справочник тегов для курсов и алгоритмических задач.",
+)
 async def list_tags(_: TeacherUser, service: FromDishka[TagService]) -> list[TagOut]:
     return tags_out(await service.list_all())

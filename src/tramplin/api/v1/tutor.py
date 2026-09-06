@@ -91,7 +91,11 @@ def _stream(client: LlmClient, prompt: ChatPrompt, settings: Settings) -> Stream
     )
 
 
-@router.post("/lessons/{lesson_id}/messages")
+@router.post(
+    "/lessons/{lesson_id}/messages",
+    summary="Спросить ИИ-репетитора об уроке",
+    description="Стримит ответ через SSE (text/event-stream); доступно и гостям.",
+)
 async def ask(
     lesson_id: uuid.UUID,
     payload: TutorAskIn,
@@ -113,7 +117,11 @@ async def ask(
     return response
 
 
-@router.post("/algorithm-problems/{problem_id}/messages")
+@router.post(
+    "/algorithm-problems/{problem_id}/messages",
+    summary="Спросить ИИ-репетитора об алгоритмической задаче",
+    description="Стримит ответ через SSE (text/event-stream); доступно и гостям.",
+)
 async def ask_about_problem(
     problem_id: uuid.UUID,
     payload: TutorAskIn,

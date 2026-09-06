@@ -8,7 +8,14 @@ from tramplin.services.course_plans import CoursePlanService
 router = APIRouter(tags=["authoring:course-plans"], route_class=DishkaRoute)
 
 
-@router.post("/course-plans/apply")
+@router.post(
+    "/course-plans/apply",
+    summary="Применить план курса",
+    description=(
+        "Массово создаёт или обновляет структуру курса (модули, уроки, тесты) из "
+        "одного документа; используется MCP-сервером для программного наполнения курсов."
+    ),
+)
 async def apply_course_plan(
     payload: CoursePlanApply,
     user: TeacherUser,

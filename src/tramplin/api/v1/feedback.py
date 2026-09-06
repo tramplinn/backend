@@ -34,7 +34,12 @@ def _feedback_out(feedback: Feedback, *, asset_base_url: str) -> FeedbackOut:
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Отправить обратную связь",
+    description="Создаёт обращение пользователя со ссылкой на страницу и вложениями.",
+)
 async def submit_feedback(
     payload: FeedbackCreate,
     user: CurrentUser,
@@ -50,7 +55,11 @@ async def submit_feedback(
     return _feedback_out(created, asset_base_url=settings.s3_public_base_url)
 
 
-@admin_router.get("")
+@admin_router.get(
+    "",
+    summary="Список обращений (админ)",
+    description="Обращения с фильтром по статусу, постранично.",
+)
 async def list_feedback(
     _: AdminUser,
     feedback: FromDishka[FeedbackService],
@@ -70,7 +79,11 @@ async def list_feedback(
     )
 
 
-@admin_router.patch("/{feedback_id}")
+@admin_router.patch(
+    "/{feedback_id}",
+    summary="Изменить статус обращения (админ)",
+    description="Переводит обращение в новый статус обработки.",
+)
 async def update_feedback_status(
     feedback_id: uuid.UUID,
     payload: FeedbackStatusUpdate,
@@ -82,7 +95,12 @@ async def update_feedback_status(
     return _feedback_out(updated, asset_base_url=settings.s3_public_base_url)
 
 
-@admin_router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
+@admin_router.delete(
+    "/{feedback_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить обращение (админ)",
+    description="Безвозвратно удаляет обращение вместе с вложениями.",
+)
 async def delete_feedback(
     feedback_id: uuid.UUID,
     _: AdminUser,

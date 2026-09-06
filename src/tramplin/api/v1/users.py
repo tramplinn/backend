@@ -11,7 +11,11 @@ router = APIRouter(prefix="/users", tags=["users"], route_class=DishkaRoute)
 SearchQuery = Annotated[str | None, Query(max_length=200)]
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="Поиск пользователей",
+    description="Публичный поиск по активным пользователям с постраничным выводом.",
+)
 async def search_users(
     users: FromDishka[UserService],
     q: SearchQuery = None,
@@ -27,7 +31,11 @@ async def search_users(
     )
 
 
-@router.get("/{login}")
+@router.get(
+    "/{login}",
+    summary="Публичный профиль пользователя",
+    description="Профиль по логину вместе со сводной статистикой обучения.",
+)
 async def get_user_profile(login: str, users: FromDishka[UserService]) -> PublicProfileOut:
     user, stats, courses = await users.get_public_profile(login)
     return PublicProfileOut(

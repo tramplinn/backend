@@ -13,7 +13,11 @@ from tramplin.services.news import NewsService
 router = APIRouter(prefix="/news", tags=["authoring:news"], route_class=DishkaRoute)
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="Список новостей автора",
+    description="Все новости, включая черновики, для авторской панели.",
+)
 async def list_drafts(
     _: TeacherUser,
     news: FromDishka[NewsService],
@@ -30,7 +34,12 @@ async def list_drafts(
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать новость",
+    description="Создаёт новость как черновик; фото прикрепляются по asset id.",
+)
 async def create_news(
     payload: NewsCreate,
     user: TeacherUser,
@@ -43,7 +52,11 @@ async def create_news(
     return news_out(created, asset_base_url=settings.s3_public_base_url)
 
 
-@router.patch("/{news_id}")
+@router.patch(
+    "/{news_id}",
+    summary="Изменить новость",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_news(
     news_id: uuid.UUID,
     payload: NewsUpdate,
@@ -55,7 +68,12 @@ async def update_news(
     return news_out(updated, asset_base_url=settings.s3_public_base_url)
 
 
-@router.delete("/{news_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{news_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить новость",
+    description="Безвозвратно удаляет новость.",
+)
 async def delete_news(
     news_id: uuid.UUID,
     _: TeacherUser,

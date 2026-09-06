@@ -13,7 +13,11 @@ from tramplin.services.users import UserService
 router = APIRouter(prefix="/admin", tags=["admin"], route_class=DishkaRoute)
 
 
-@router.get("/users")
+@router.get(
+    "/users",
+    summary="Список пользователей (админ)",
+    description="Поиск и фильтрация всех пользователей, включая деактивированных.",
+)
 async def list_users(
     _: AdminUser,
     users: FromDishka[UserService],
@@ -38,7 +42,11 @@ async def list_users(
     )
 
 
-@router.patch("/users/{user_id}")
+@router.patch(
+    "/users/{user_id}",
+    summary="Изменить пользователя (админ)",
+    description="Меняет роль или статус активности пользователя.",
+)
 async def update_user(
     user_id: uuid.UUID,
     payload: UserAdminUpdate,
@@ -49,7 +57,11 @@ async def update_user(
     return UserOut.model_validate(user)
 
 
-@router.get("/code-runner/health")
+@router.get(
+    "/code-runner/health",
+    summary="Статус исполнителя кода",
+    description="Доступность сервиса, запускающего решения алгоритмических задач.",
+)
 async def code_runner_health(
     _: AdminUser,
     service: FromDishka[AlgorithmOperationsService],
@@ -58,7 +70,11 @@ async def code_runner_health(
     return RunnerHealthOut(status=health, languages=languages)
 
 
-@router.get("/code-runner/languages")
+@router.get(
+    "/code-runner/languages",
+    summary="Поддерживаемые языки исполнителя",
+    description="Языки, доступные исполнителю кода на данный момент.",
+)
 async def code_runner_languages(
     _: AdminUser,
     service: FromDishka[AlgorithmOperationsService],
@@ -66,7 +82,11 @@ async def code_runner_languages(
     return [RunnerLanguageOut.model_validate(item) for item in await service.languages()]
 
 
-@router.get("/code-runner/queue")
+@router.get(
+    "/code-runner/queue",
+    summary="Очередь исполнителя кода",
+    description="Число запущенных, ожидающих и не доставленных в очередь посылок.",
+)
 async def code_runner_queue(
     _: AdminUser,
     service: FromDishka[AlgorithmOperationsService],

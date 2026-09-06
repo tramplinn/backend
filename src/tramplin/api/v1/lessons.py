@@ -18,7 +18,11 @@ from tramplin.services.lessons import LessonService
 router = APIRouter(tags=["authoring:lessons"], route_class=DishkaRoute)
 
 
-@router.post("/markdown/preview")
+@router.post(
+    "/markdown/preview",
+    summary="Предпросмотр Markdown урока",
+    description="Рендерит HTML и извлекает карточки для собеседований, ничего не сохраняя.",
+)
 async def preview_markdown(
     payload: MarkdownPreviewIn,
     _: TeacherUser,
@@ -33,7 +37,12 @@ async def preview_markdown(
     )
 
 
-@router.post("/modules/{module_id}/lessons", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/modules/{module_id}/lessons",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать урок",
+    description="Добавляет урок в конец модуля как черновик.",
+)
 async def create_lesson(
     module_id: uuid.UUID,
     payload: LessonCreate,
@@ -44,17 +53,24 @@ async def create_lesson(
     return lesson_out(await lessons.create(module_id, lesson, user.id))
 
 
-@router.get("/lessons/{lesson_id}")
+@router.get(
+    "/lessons/{lesson_id}",
+    summary="Урок по id (автор)",
+    description="Черновики видны только здесь: публичный роут отдаёт лишь опубликованное.",
+)
 async def get_lesson(
     lesson_id: uuid.UUID,
     _: TeacherUser,
     lessons: FromDishka[LessonService],
 ) -> LessonOut:
-    """Черновики видны только здесь: публичный роут отдаёт лишь опубликованное."""
     return lesson_out(await lessons.get(lesson_id, published_only=False))
 
 
-@router.patch("/lessons/{lesson_id}")
+@router.patch(
+    "/lessons/{lesson_id}",
+    summary="Изменить урок",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_lesson(
     lesson_id: uuid.UUID,
     payload: LessonUpdate,
@@ -65,7 +81,12 @@ async def update_lesson(
     return lesson_out(lesson)
 
 
-@router.delete("/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/lessons/{lesson_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить урок",
+    description="Безвозвратно удаляет урок вместе с его карточками для собеседований.",
+)
 async def delete_lesson(
     lesson_id: uuid.UUID,
     _: TeacherUser,

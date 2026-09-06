@@ -12,7 +12,11 @@ from tramplin.services.tracks import TrackService
 router = APIRouter(tags=["authoring:tracks"], route_class=DishkaRoute)
 
 
-@router.get("/tracks")
+@router.get(
+    "/tracks",
+    summary="Список треков (автор)",
+    description="Все треки, включая черновики, для авторской панели.",
+)
 async def list_tracks(
     _: TeacherUser,
     tracks: FromDishka[TrackService],
@@ -29,7 +33,11 @@ async def list_tracks(
     ]
 
 
-@router.get("/tracks/{slug}")
+@router.get(
+    "/tracks/{slug}",
+    summary="Трек по slug (автор)",
+    description="Включает черновик и его неопубликованные курсы.",
+)
 async def get_track(
     slug: str,
     _: TeacherUser,
@@ -43,7 +51,12 @@ async def get_track(
     )
 
 
-@router.post("/tracks", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tracks",
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать трек",
+    description="Создаёт трек как черновик, без курсов.",
+)
 async def create_track(
     payload: TrackCreate,
     user: TeacherUser,
@@ -57,7 +70,11 @@ async def create_track(
     )
 
 
-@router.patch("/tracks/{track_id}")
+@router.patch(
+    "/tracks/{track_id}",
+    summary="Изменить трек",
+    description="Частичное обновление; передаются только изменённые поля.",
+)
 async def update_track(
     track_id: uuid.UUID,
     payload: TrackUpdate,
@@ -76,6 +93,8 @@ async def update_track(
 @router.put(
     "/tracks/{track_id}/courses/order",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать порядок курсов в треке",
+    description="Полностью заменяет порядок: список должен содержать все id курсов трека.",
 )
 async def reorder_courses(
     track_id: uuid.UUID,
@@ -89,6 +108,8 @@ async def reorder_courses(
 @router.put(
     "/tracks/{track_id}/courses/{course_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Прикрепить курс к треку",
+    description="Идемпотентно: повторный вызов для уже прикреплённого курса ничего не меняет.",
 )
 async def attach_course(
     track_id: uuid.UUID,
@@ -102,6 +123,8 @@ async def attach_course(
 @router.delete(
     "/tracks/{track_id}/courses/{course_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Открепить курс от трека",
+    description="Убирает курс из трека, не удаляя сам курс.",
 )
 async def detach_course(
     track_id: uuid.UUID,
@@ -112,7 +135,12 @@ async def detach_course(
     await tracks.detach_course(track_id, course_id)
 
 
-@router.delete("/tracks/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/tracks/{track_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить трек",
+    description="Удаляет трек; входящие в него курсы не удаляются.",
+)
 async def delete_track(
     track_id: uuid.UUID,
     _: TeacherUser,
