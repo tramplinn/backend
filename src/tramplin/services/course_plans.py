@@ -155,6 +155,10 @@ class CoursePlanService:
                 )
                 mark_created(lesson, actor_id)
                 self._lessons.add(lesson)
+                # ModuleItem.lesson — viewonly, ORM не строит по нему порядок flush: без явного
+                # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO lessons и
+                # упасть на fk_module_items_lesson_id_module_id_lessons.
+                await self._transaction.flush()
                 item = self._new_item(module, actor_id, lesson_id=lesson.id)
                 stats.created += 1
             else:
@@ -191,6 +195,10 @@ class CoursePlanService:
                 quiz.questions = []
                 mark_created(quiz, actor_id)
                 self._quizzes.add(quiz)
+                # ModuleItem.quiz — viewonly, ORM не строит по нему порядок flush: без явного
+                # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO quizzes и
+                # упасть на fk_module_items_quiz_id_module_id_quizzes.
+                await self._transaction.flush()
                 item = self._new_item(module, actor_id, quiz_id=quiz.id)
                 stats.created += 1
             else:
