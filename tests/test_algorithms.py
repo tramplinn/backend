@@ -410,9 +410,14 @@ async def test_authoring_problem_cases_templates_and_publication(settings: Any) 
     assert len(runner.requests) == 2
     await service.update_problem(task.id, {"status": ContentStatus.PUBLISHED}, actor)
     assert task.status is ContentStatus.PUBLISHED
-    with pytest.raises(ConflictError):
-        await service.update_case(sample.id, {"input": "x"}, actor)
-    await service.update_problem(task.id, {"status": ContentStatus.DRAFT}, actor)
+    updated_sample = await service.update_case(sample.id, {"input": "x"}, actor)
+    assert updated_sample.input == "x"
+    assert template.validated_at is None
+    updated_template = await service.put_template(
+        task.id, "python", "# start v2", "print(int(input())*3)", actor
+    )
+    assert updated_template.starter_code == "# start v2"
+    assert updated_template.validated_at is None
     await service.delete_case(hidden.id)
     await service.delete_problem(task.id)
     with pytest.raises(NotFoundError):

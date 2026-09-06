@@ -115,11 +115,6 @@ class AlgorithmAuthoringService:
         self, problem_id: uuid.UUID, changes: dict[str, Any], actor_id: uuid.UUID
     ) -> AlgorithmProblem:
         problem = await self.get_problem(problem_id)
-        if (
-            problem.status is ContentStatus.PUBLISHED
-            and changes.get("status") is not ContentStatus.DRAFT
-        ):
-            raise ConflictError("Сначала верните задачу в черновик")
         if "statement_md" in changes:
             changes["statement_html"] = render_markdown(changes["statement_md"])
         if "tags" in changes:
@@ -151,8 +146,6 @@ class AlgorithmAuthoringService:
         self, problem_id: uuid.UUID, case: AlgorithmTestCase, actor_id: uuid.UUID
     ) -> AlgorithmTestCase:
         problem = await self.get_problem(problem_id)
-        if problem.status is ContentStatus.PUBLISHED:
-            raise ConflictError("Сначала верните задачу в черновик")
         case.problem_id = problem_id
         mark_created(case, actor_id)
         self._algorithms.add_test_case(case)
@@ -169,8 +162,6 @@ class AlgorithmAuthoringService:
             NotFoundError("Тестовый пример не найден"),
         )
         problem = await self.get_problem(case.problem_id)
-        if problem.status is ContentStatus.PUBLISHED:
-            raise ConflictError("Сначала верните задачу в черновик")
         validate_required_updates(
             changes,
             {"position", "input", "expected_output", "is_sample", "weight"},
@@ -191,8 +182,6 @@ class AlgorithmAuthoringService:
             NotFoundError("Тестовый пример не найден"),
         )
         problem = await self.get_problem(case.problem_id)
-        if problem.status is ContentStatus.PUBLISHED:
-            raise ConflictError("Сначала верните задачу в черновик")
         await self._algorithms.delete_test_case(case)
         _invalidate_templates(problem)
         await self._transaction.commit()
@@ -206,8 +195,6 @@ class AlgorithmAuthoringService:
         actor_id: uuid.UUID,
     ) -> AlgorithmTemplate:
         problem = await self.get_problem(problem_id)
-        if problem.status is ContentStatus.PUBLISHED:
-            raise ConflictError("Сначала верните задачу в черновик")
         template = await self._algorithms.get_template(problem_id, language)
         if template is None:
             template = AlgorithmTemplate(
@@ -261,9 +248,7 @@ class AlgorithmAuthoringService:
         return template
 
     async def delete_template(self, problem_id: uuid.UUID, language: str) -> None:
-        problem = await self.get_problem(problem_id)
-        if problem.status is ContentStatus.PUBLISHED:
-            raise ConflictError("Сначала верните задачу в черновик")
+        await self.get_problem(problem_id)
         template = require(
             await self._algorithms.get_template(problem_id, language),
             NotFoundError("Шаблон языка не найден"),
