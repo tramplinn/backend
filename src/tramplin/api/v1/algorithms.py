@@ -8,6 +8,7 @@ from tramplin.api.algorithm_mapping import (
     problem_card_out,
     problem_out,
     set_out,
+    solution_out,
     submission_out,
 )
 from tramplin.api.dependencies import CurrentUser
@@ -21,6 +22,7 @@ from tramplin.api.schemas.algorithms import (
     ReflectionUpdate,
     RunCreate,
     RunnerLanguageOut,
+    SolutionOut,
     SubmissionCreate,
     SubmissionOut,
 )
@@ -153,6 +155,14 @@ async def get_progress(
     problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> ProgressOut:
     return ProgressOut.model_validate(await service.get_progress(problem_id, user.id))
+
+
+@router.get("/algorithm-problems/{problem_id}/solutions")
+async def list_solutions(
+    problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
+) -> list[SolutionOut]:
+    solutions = await service.list_solutions(problem_id, user.id)
+    return [solution_out(solution) for solution in solutions]
 
 
 @router.put("/algorithm-problems/{problem_id}/reflection")

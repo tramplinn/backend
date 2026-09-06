@@ -235,6 +235,13 @@ class SubmissionOut(ApiModel):
     finished_at: datetime | None
 
 
+class SolutionOut(ApiModel):
+    id: uuid.UUID
+    language: str
+    source_code: str
+    finished_at: datetime | None
+
+
 class ReflectionUpdate(ApiModel):
     complexity_md: str | None = Field(default=None, max_length=5000)
     confidence: int | None = Field(default=None, ge=1, le=5)

@@ -111,6 +111,10 @@ class AlgorithmPracticeRepositoryPort(Protocol):
 
     async def active_submissions(self, user_id: uuid.UUID) -> int: ...
 
+    async def list_accepted_submissions(
+        self, user_id: uuid.UUID, problem_id: uuid.UUID, *, limit: int
+    ) -> list[AlgorithmSubmission]: ...
+
     async def submission_count(
         self,
         *,

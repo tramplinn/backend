@@ -360,6 +360,8 @@ async def test_algorithm_repository_queries_and_mutations() -> None:
     assert await repository.get_submission(submission.id) is submission
     assert await repository.get_submission(submission.id, for_update=True) is submission
     assert await repository.active_submissions(user_id) == 1
+    session.scalars.return_value = ScalarResultFake([submission])
+    assert await repository.list_accepted_submissions(user_id, problem.id, limit=50) == [submission]
     assert (
         await repository.submission_count(
             user_id=user_id,

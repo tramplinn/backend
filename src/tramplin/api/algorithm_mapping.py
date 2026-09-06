@@ -6,6 +6,7 @@ from tramplin.api.schemas.algorithms import (
     RunCaseOut,
     SampleCaseOut,
     SetProblemOut,
+    SolutionOut,
     SubmissionOut,
     TemplateAuthorOut,
     TemplateStudentOut,
@@ -121,5 +122,14 @@ def submission_out(submission: AlgorithmSubmission) -> SubmissionOut:
         safe_error=submission.safe_error,
         cases=cases if submission.kind.value == "run" else [],
         created_at=submission.created_at,
+        finished_at=submission.finished_at,
+    )
+
+
+def solution_out(submission: AlgorithmSubmission) -> SolutionOut:
+    return SolutionOut(
+        id=submission.id,
+        language=submission.language,
+        source_code=submission.source_code,
         finished_at=submission.finished_at,
     )

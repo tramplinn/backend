@@ -54,6 +54,7 @@ from tramplin.services.algorithms import (
     AlgorithmWorkerService,
 )
 from tramplin.services.contracts import RunnerJob, RunnerLanguage, RunRequest, RunResult
+from tramplin.services.tags import TagService
 
 
 class TransactionFake:
@@ -250,6 +251,20 @@ class AlgorithmsFake:
         self, *, user_id: Any, since: Any = None, session_id: Any = None, problem_id: Any = None
     ) -> int:
         return self.hour_count if since is not None else self.problem_count
+
+    async def list_accepted_submissions(
+        self, user_id: Any, problem_id: Any, *, limit: int
+    ) -> list[AlgorithmSubmission]:
+        items = [
+            item
+            for item in self.submissions.values()
+            if item.user_id == user_id
+            and item.problem_id == problem_id
+            and item.kind is SubmissionKind.SUBMIT
+            and item.verdict is AlgorithmVerdict.ACCEPTED
+        ]
+        items.sort(key=lambda item: item.finished_at or utc_now(), reverse=True)
+        return items[:limit]
 
     async def claim_submission(self, *, stale_before: Any) -> AlgorithmSubmission | None:
         return next(
@@ -548,6 +563,13 @@ async def test_catalog_lists_published_with_progress(settings: Any) -> None:
     assert card.languages == ["python"]
 
 
+async def test_tag_service_lists_all_tags() -> None:
+    tags = TagsFake()
+    await tags.get_or_create_many(["arrays", "graphs"])
+    service = TagService(tags)
+    assert [tag.name for tag in await service.list_all()] == ["arrays", "graphs"]
+
+
 async def test_catalog_filters(settings: Any) -> None:
     repo = AlgorithmsFake()
     task, _ = published_course(repo)
@@ -576,6 +598,36 @@ async def test_free_session_allows_any_published_problem(settings: Any) -> None:
         session.id, task.id, user, SubmissionKind.SUBMIT, "python", "print(2)"
     )
     assert run.status is SubmissionStatus.QUEUED
+
+
+async def test_list_solutions_returns_accepted_submissions_newest_first(settings: Any) -> None:
+    repo, tx = AlgorithmsFake(), TransactionFake()
+    task, practice_set = published_course(repo)
+    practice_service = AlgorithmPracticeService(tx, repo, settings)
+    worker = AlgorithmWorkerService(tx, repo, RunnerFake(), settings)
+    user = new_id()
+    session = await practice_service.start_session(practice_set.id, user)
+
+    first = await practice_service.enqueue(
+        session.id, task.id, user, SubmissionKind.SUBMIT, "python", "print(2)"
+    )
+    assert await worker.process_next()
+    second = await practice_service.enqueue(
+        session.id, task.id, user, SubmissionKind.SUBMIT, "python", "print(int(input())+1)"
+    )
+    assert await worker.process_next()
+    # Гарантируем порядок независимо от разрешения часов теста.
+    second.finished_at = (first.finished_at or utc_now()) + timedelta(seconds=1)
+
+    solutions = await practice_service.list_solutions(task.id, user)
+    assert [item.source_code for item in solutions] == [
+        "print(int(input())+1)",
+        "print(2)",
+    ]
+    assert all(item.verdict is AlgorithmVerdict.ACCEPTED for item in solutions)
+
+    with pytest.raises(NotFoundError):
+        await practice_service.list_solutions(new_id(), user)
 
 
 async def test_mock_session_expires(settings: Any) -> None:

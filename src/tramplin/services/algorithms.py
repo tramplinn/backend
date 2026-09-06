@@ -585,6 +585,12 @@ class AlgorithmPracticeService:
         progress = await self._algorithms.get_progress(user_id, problem_id)
         return progress or _new_progress(user_id, problem_id)
 
+    async def list_solutions(
+        self, problem_id: uuid.UUID, user_id: uuid.UUID
+    ) -> list[AlgorithmSubmission]:
+        await self.get_problem(problem_id)
+        return await self._algorithms.list_accepted_submissions(user_id, problem_id, limit=50)
+
     async def update_reflection(
         self,
         problem_id: uuid.UUID,

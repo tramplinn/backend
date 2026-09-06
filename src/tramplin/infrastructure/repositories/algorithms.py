@@ -20,7 +20,13 @@ from tramplin.models.algorithms import (
     algorithm_problem_tags,
 )
 from tramplin.models.base import soft_delete
-from tramplin.models.enums import AlgorithmDifficulty, ContentStatus, SubmissionStatus
+from tramplin.models.enums import (
+    AlgorithmDifficulty,
+    AlgorithmVerdict,
+    ContentStatus,
+    SubmissionKind,
+    SubmissionStatus,
+)
 from tramplin.models.tags import Tag
 from tramplin.models.users import User
 
@@ -235,6 +241,22 @@ class AlgorithmRepository(Repository):
         if for_update:
             stmt = stmt.with_for_update()
         return (await self._session.scalars(stmt)).one_or_none()
+
+    async def list_accepted_submissions(
+        self, user_id: uuid.UUID, problem_id: uuid.UUID, *, limit: int
+    ) -> list[AlgorithmSubmission]:
+        stmt = (
+            select(AlgorithmSubmission)
+            .where(
+                AlgorithmSubmission.user_id == user_id,
+                AlgorithmSubmission.problem_id == problem_id,
+                AlgorithmSubmission.kind == SubmissionKind.SUBMIT,
+                AlgorithmSubmission.verdict == AlgorithmVerdict.ACCEPTED,
+            )
+            .order_by(AlgorithmSubmission.finished_at.desc())
+            .limit(limit)
+        )
+        return list((await self._session.scalars(stmt)).all())
 
     async def active_submissions(self, user_id: uuid.UUID) -> int:
         stmt = (
