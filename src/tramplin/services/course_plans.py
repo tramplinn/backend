@@ -83,6 +83,22 @@ class CoursePlanService:
             )
 
         modules = {module.slug: module for module in course.modules}
+        desired_slugs = {module_plan.slug for module_plan in plan.modules}
+        preserved_modules = [
+            module for module in course.modules if module.slug not in desired_slugs
+        ]
+        # Сначала уводим модули вне плана во временный отрицательный диапазон и
+        # сбрасываем на диск: позиции гарантированно попарно различны и не пересекаются
+        # ни с чем существующим, поэтому не зависят от порядка, в котором SQLAlchemy
+        # отправит сами UPDATE. Без этого шага INSERT нового модуля на позицию,
+        # которую ещё держит несдвинутый старый, падает на uq_modules_course_id_position
+        # (а сдвиг всех разом одним шагом в финальные позиции упёрся бы в то же самое
+        # ограничение между собой, если модулей вне плана больше одного).
+        for offset, preserved_module in enumerate(preserved_modules):
+            preserved_module.position = -(offset + 1)
+        if preserved_modules:
+            await self._transaction.flush()
+
         desired_modules: list[Module] = []
         for position, module_plan in enumerate(plan.modules):
             module = modules.get(module_plan.slug)
@@ -114,10 +130,6 @@ class CoursePlanService:
             desired_modules.append(module)
             await self._apply_module(module, module_plan, actor_id, stats)
 
-        desired_slugs = {module.slug for module in desired_modules}
-        preserved_modules = [
-            module for module in course.modules if module.slug not in desired_slugs
-        ]
         ordered_modules = [*desired_modules, *preserved_modules]
         for position, module in enumerate(ordered_modules):
             module.position = position

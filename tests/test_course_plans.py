@@ -186,6 +186,39 @@ async def test_apply_creates_and_then_updates_complete_course_plan() -> None:
     assert lessons.lessons[0].body_html.startswith("<h1")
 
 
+async def test_apply_repositions_module_left_out_of_a_later_plan() -> None:
+    """A module already on the course but absent from a later plan call must be
+    shifted out of the plan's position range, not left colliding with a new module
+    inserted at the same position (regression for uq_modules_course_id_position)."""
+    service, _, _, modules, *_ = make_service()
+    actor_id = uuid.uuid7()
+
+    course, _ = await service.apply(course_plan(), actor_id)
+    course.modules = modules.modules
+    basics = modules.modules[0]
+    assert basics.position == 0
+
+    second_plan = CoursePlanApply.model_validate(
+        {
+            "title": course.title,
+            "slug": course.slug,
+            "modules": [
+                {
+                    "title": "Продвинутое",
+                    "slug": "advanced",
+                    "lessons": [{"title": "Глубже", "slug": "deep", "body_md": "# Глубже"}],
+                }
+            ],
+        }
+    )
+
+    await service.apply(second_plan, actor_id)
+
+    advanced = next(module for module in modules.modules if module.slug == "advanced")
+    assert advanced.position == 0
+    assert basics.position == 1
+
+
 async def test_apply_rejects_cross_module_lesson_link() -> None:
     service, transaction, *_ = make_service()
     plan = course_plan()
