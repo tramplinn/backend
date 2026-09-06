@@ -120,6 +120,9 @@ build:
     - job: trivy-sca
       artifacts: false
   image: alpine:3.24.1
+  retry:
+    max: 2
+    when: [script_failure, runner_system_failure]
   before_script:
     - apk add --no-cache openssh-client
     - export SSH_AUTH_SOCK=/tmp/ssh-agent.sock
@@ -150,7 +153,15 @@ build:
       trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
 
       "${compose[@]}" config --quiet
-      "${compose[@]}" pull --quiet
+      # Реестр GitLab иногда отдаёт "repository does not exist" на pull через
+      # пару секунд после успешного push, а containerd иногда падает на
+      # распаковке слоя гонкой в overlayfs (UtimesNanoAt: no such file or
+      # directory). Оба случая обычно проходят со второй попытки.
+      for attempt in 1 2 3 4 5; do
+        "${compose[@]}" pull --quiet && break
+        [ "$attempt" -eq 5 ] && exit 1
+        sleep $((attempt * 5))
+      done
       "${compose[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 60
       docker image prune -f
       REMOTE
