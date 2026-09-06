@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, Body, Query, status
+from fastapi import APIRouter, File, Form, UploadFile, status
 
 from tramplin.api.dependencies import CurrentUser
 from tramplin.api.schemas.assets import AssetOut
@@ -9,9 +9,6 @@ from tramplin.models.enums import AssetMime
 from tramplin.services.assets import AssetService, StoredAsset
 
 router = APIRouter(prefix="/assets", tags=["assets"], route_class=DishkaRoute)
-
-Filename = Annotated[str, Query(min_length=1, max_length=255)]
-FileBody = Annotated[bytes, Body(media_type="application/octet-stream")]
 
 
 def _asset_out(stored: StoredAsset) -> AssetOut:
@@ -26,10 +23,10 @@ def _asset_out(stored: StoredAsset) -> AssetOut:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_asset(
-    filename: Filename,
-    mime: AssetMime,
-    body: FileBody,
+    file: Annotated[UploadFile, File()],
+    mime: Annotated[AssetMime, Form()],
     user: CurrentUser,
     assets: FromDishka[AssetService],
 ) -> AssetOut:
-    return _asset_out(await assets.upload(filename, mime, body, user.id))
+    body = await file.read()
+    return _asset_out(await assets.upload(file.filename or "", mime, body, user.id))

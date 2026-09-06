@@ -25,7 +25,7 @@ from tramplin.services.algorithms import AlgorithmAuthoringService
 router = APIRouter(tags=["authoring:algorithms"], route_class=DishkaRoute)
 
 
-@router.get("/algorithm-problems")
+@router.get("/algorithms/problems")
 async def list_problems(
     _: TeacherUser,
     service: FromDishka[AlgorithmAuthoringService],
@@ -33,7 +33,7 @@ async def list_problems(
     return [problem_author_out(item) for item in await service.list_problems()]
 
 
-@router.post("/algorithm-problems", status_code=status.HTTP_201_CREATED)
+@router.post("/algorithms/problems", status_code=status.HTTP_201_CREATED)
 async def create_problem(
     payload: ProblemCreate, user: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> ProblemAuthorOut:
@@ -44,14 +44,14 @@ async def create_problem(
     return problem_author_out(await service.create_problem(problem, tag_names, user.id))
 
 
-@router.get("/algorithm-problems/{problem_id}")
+@router.get("/algorithms/problems/{problem_id}")
 async def get_problem(
     problem_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> ProblemAuthorOut:
     return problem_author_out(await service.get_problem(problem_id))
 
 
-@router.patch("/algorithm-problems/{problem_id}")
+@router.patch("/algorithms/problems/{problem_id}")
 async def update_problem(
     problem_id: uuid.UUID,
     payload: ProblemUpdate,
@@ -64,14 +64,14 @@ async def update_problem(
     return problem_author_out(await service.update_problem(problem_id, changes, user.id))
 
 
-@router.delete("/algorithm-problems/{problem_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/algorithms/problems/{problem_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_problem(
     problem_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> None:
     await service.delete_problem(problem_id)
 
 
-@router.post("/algorithm-problems/{problem_id}/test-cases", status_code=status.HTTP_201_CREATED)
+@router.post("/algorithms/problems/{problem_id}/test-cases", status_code=status.HTTP_201_CREATED)
 async def add_case(
     problem_id: uuid.UUID,
     payload: TestCaseCreate,
@@ -82,7 +82,7 @@ async def add_case(
     return TestCaseOut.model_validate(await service.add_case(problem_id, case, user.id))
 
 
-@router.patch("/algorithm-test-cases/{case_id}")
+@router.patch("/algorithms/test-cases/{case_id}")
 async def update_case(
     case_id: uuid.UUID,
     payload: TestCaseUpdate,
@@ -94,14 +94,14 @@ async def update_case(
     )
 
 
-@router.delete("/algorithm-test-cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/algorithms/test-cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_case(
     case_id: uuid.UUID, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
 ) -> None:
     await service.delete_case(case_id)
 
 
-@router.put("/algorithm-problems/{problem_id}/templates/{language}")
+@router.put("/algorithms/problems/{problem_id}/templates/{language}")
 async def put_template(
     problem_id: uuid.UUID,
     language: str,
@@ -120,7 +120,7 @@ async def put_template(
     )
 
 
-@router.post("/algorithm-problems/{problem_id}/templates/{language}/validate")
+@router.post("/algorithms/problems/{problem_id}/templates/{language}/validate")
 async def validate_template(
     problem_id: uuid.UUID,
     language: str,
@@ -133,7 +133,7 @@ async def validate_template(
 
 
 @router.delete(
-    "/algorithm-problems/{problem_id}/templates/{language}",
+    "/algorithms/problems/{problem_id}/templates/{language}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_template(

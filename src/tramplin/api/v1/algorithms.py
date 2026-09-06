@@ -34,7 +34,7 @@ from tramplin.services.contracts import CodeRunner
 router = APIRouter(tags=["algorithms"], route_class=DishkaRoute)
 
 
-@router.get("/algorithm-problems")
+@router.get("/algorithms/problems")
 async def list_catalog(
     user: CurrentUser,
     service: FromDishka[AlgorithmPracticeService],
@@ -94,19 +94,19 @@ async def complete_session(
     )
 
 
-@router.get("/algorithm-problems/{problem_id}")
+@router.get("/algorithms/problems/{problem_id}")
 async def get_problem(
     problem_id: uuid.UUID, _: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> ProblemOut:
     return problem_out(await service.get_problem(problem_id))
 
 
-@router.get("/algorithm-languages")
+@router.get("/algorithms/languages")
 async def languages(_: CurrentUser, runner: FromDishka[CodeRunner]) -> list[RunnerLanguageOut]:
     return [RunnerLanguageOut.model_validate(language) for language in await runner.languages()]
 
 
-@router.post("/algorithm-problems/{problem_id}/runs", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/algorithms/problems/{problem_id}/runs", status_code=status.HTTP_202_ACCEPTED)
 async def run_code(
     problem_id: uuid.UUID,
     payload: RunCreate,
@@ -125,7 +125,7 @@ async def run_code(
     return submission_out(submission)
 
 
-@router.post("/algorithm-problems/{problem_id}/submissions", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/algorithms/problems/{problem_id}/submissions", status_code=status.HTTP_202_ACCEPTED)
 async def submit_code(
     problem_id: uuid.UUID,
     payload: SubmissionCreate,
@@ -143,21 +143,21 @@ async def submit_code(
     return submission_out(submission)
 
 
-@router.get("/algorithm-submissions/{submission_id}")
+@router.get("/algorithms/submissions/{submission_id}")
 async def get_submission(
     submission_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> SubmissionOut:
     return submission_out(await service.get_submission(submission_id, user.id))
 
 
-@router.get("/algorithm-problems/{problem_id}/progress")
+@router.get("/algorithms/problems/{problem_id}/progress")
 async def get_progress(
     problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> ProgressOut:
     return ProgressOut.model_validate(await service.get_progress(problem_id, user.id))
 
 
-@router.get("/algorithm-problems/{problem_id}/solutions")
+@router.get("/algorithms/problems/{problem_id}/solutions")
 async def list_solutions(
     problem_id: uuid.UUID, user: CurrentUser, service: FromDishka[AlgorithmPracticeService]
 ) -> list[SolutionOut]:
@@ -165,7 +165,7 @@ async def list_solutions(
     return [solution_out(solution) for solution in solutions]
 
 
-@router.put("/algorithm-problems/{problem_id}/reflection")
+@router.put("/algorithms/problems/{problem_id}/reflection")
 async def update_reflection(
     problem_id: uuid.UUID,
     payload: ReflectionUpdate,

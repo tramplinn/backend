@@ -8,7 +8,6 @@ from tramplin.api.schemas.modules import (
     ItemsOrder,
     ModuleContentOrder,
     ModuleCreate,
-    ModuleDependencyCreate,
     ModuleDependencyOut,
     ModuleOut,
     ModuleTreeOut,
@@ -70,14 +69,17 @@ async def update_module(
     return ModuleOut.model_validate(module)
 
 
-@router.put("/modules/{module_id}/dependencies", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/modules/{module_id}/dependencies/{depends_on_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def add_module_dependency(
     module_id: uuid.UUID,
-    payload: ModuleDependencyCreate,
+    depends_on_id: uuid.UUID,
     user: TeacherUser,
     modules: FromDishka[ModuleService],
 ) -> None:
-    await modules.add_dependency(module_id, payload.depends_on_id, user.id)
+    await modules.add_dependency(module_id, depends_on_id, user.id)
 
 
 @router.delete(

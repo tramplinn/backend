@@ -24,6 +24,7 @@ dependencies = [
     "openai>=3.7.0",
     "faststream[rabbit]>=0.7.5",
     "pgvector>=0.4.1",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]

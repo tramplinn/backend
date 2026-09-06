@@ -100,10 +100,6 @@ class ModuleContentOrder(ApiModel):
         return value
 
 
-class ModuleDependencyCreate(ApiModel):
-    depends_on_id: uuid.UUID
-
-
 class ModuleDependencyOut(ApiModel):
     module_id: uuid.UUID
     depends_on_id: uuid.UUID

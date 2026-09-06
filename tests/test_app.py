@@ -62,7 +62,7 @@ async def test_openapi_exposes_auth_routes(settings: Settings) -> None:
     assert "/api/v1/quizzes/{quiz_id}/attempts" in schema["paths"]
     assert "/api/v1/authoring/courses" in schema["paths"]
     assert "/api/v1/tracks" in schema["paths"]
-    assert "/api/v1/authoring/modules/{module_id}/dependencies" in schema["paths"]
+    assert "/api/v1/authoring/modules/{module_id}/dependencies/{depends_on_id}" in schema["paths"]
     assert "/api/v1/authoring/modules/{module_id}/order" in schema["paths"]
     assert "/api/v1/authoring/modules/{module_id}/lessons/order" not in schema["paths"]
     assert "/api/v1/authoring/modules/{module_id}/quizzes/order" not in schema["paths"]
