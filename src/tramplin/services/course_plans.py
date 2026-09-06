@@ -153,6 +153,7 @@ class CoursePlanService:
                     body_html="",
                     status=ContentStatus.DRAFT,
                 )
+                lesson.interview_cards = []
                 mark_created(lesson, actor_id)
                 self._lessons.add(lesson)
                 # ModuleItem.lesson — viewonly, ORM не строит по нему порядок flush: без явного
