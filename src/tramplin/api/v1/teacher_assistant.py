@@ -5,7 +5,9 @@ from tramplin.api.dependencies import TeacherUser
 from tramplin.api.schemas.teacher_assistant import TeacherAssistantIn, TeacherAssistantOut
 from tramplin.services.teacher_assistant import TeacherAssistantService
 
-router = APIRouter(prefix="/assistant", route_class=DishkaRoute)
+router = APIRouter(
+    prefix="/assistant", tags=["authoring:teacher-assistant"], route_class=DishkaRoute
+)
 
 
 @router.post("/suggest")

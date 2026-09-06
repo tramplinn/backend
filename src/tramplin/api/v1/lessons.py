@@ -15,7 +15,7 @@ from tramplin.api.schemas.lessons import (
 from tramplin.models.content import Lesson
 from tramplin.services.lessons import LessonService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:lessons"], route_class=DishkaRoute)
 
 
 @router.post("/markdown/preview")

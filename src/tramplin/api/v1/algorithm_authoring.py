@@ -22,7 +22,7 @@ from tramplin.api.schemas.algorithms import (
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmTestCase, PracticeSet
 from tramplin.services.algorithms import AlgorithmAuthoringService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:algorithms"], route_class=DishkaRoute)
 
 
 @router.get("/algorithm-problems")

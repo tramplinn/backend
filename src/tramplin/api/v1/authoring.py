@@ -15,7 +15,7 @@ from tramplin.api.v1 import (
     tracks,
 )
 
-router = APIRouter(prefix="/authoring", tags=["authoring"])
+router = APIRouter(prefix="/authoring")
 router.include_router(tracks.router)
 router.include_router(courses.router)
 router.include_router(modules.router)

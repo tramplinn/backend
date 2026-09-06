@@ -9,7 +9,7 @@ from tramplin.core.config import Settings
 from tramplin.models.content import Track
 from tramplin.services.tracks import TrackService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:tracks"], route_class=DishkaRoute)
 
 
 @router.get("/tracks")

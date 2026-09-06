@@ -14,7 +14,7 @@ from tramplin.core.config import Settings
 from tramplin.models.content import Course
 from tramplin.services.courses import CourseService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:courses"], route_class=DishkaRoute)
 
 
 @router.get("/courses")

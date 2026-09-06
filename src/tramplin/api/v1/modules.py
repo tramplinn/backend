@@ -18,7 +18,7 @@ from tramplin.core.config import Settings
 from tramplin.models.content import Module
 from tramplin.services.modules import ModuleService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:modules"], route_class=DishkaRoute)
 
 
 @router.get("/courses/{slug}/module-dependencies")

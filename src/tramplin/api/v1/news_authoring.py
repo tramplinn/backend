@@ -10,7 +10,7 @@ from tramplin.core.config import Settings
 from tramplin.models.news import News
 from tramplin.services.news import NewsService
 
-router = APIRouter(prefix="/news", route_class=DishkaRoute)
+router = APIRouter(prefix="/news", tags=["authoring:news"], route_class=DishkaRoute)
 
 
 @router.get("")

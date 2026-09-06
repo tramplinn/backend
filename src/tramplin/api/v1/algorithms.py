@@ -31,7 +31,7 @@ from tramplin.models.enums import AlgorithmDifficulty, SubmissionKind
 from tramplin.services.algorithms import AlgorithmPracticeService
 from tramplin.services.contracts import CodeRunner
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["algorithms"], route_class=DishkaRoute)
 
 
 @router.get("/algorithm-problems")

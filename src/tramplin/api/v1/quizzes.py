@@ -17,7 +17,7 @@ from tramplin.core.config import Settings
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.quizzes import QuizService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:quizzes"], route_class=DishkaRoute)
 
 
 @router.post("/modules/{module_id}/quizzes", status_code=status.HTTP_201_CREATED)

@@ -5,7 +5,7 @@ from tramplin.api.dependencies import TeacherUser
 from tramplin.api.schemas.course_plans import CoursePlanApply, CoursePlanApplyOut
 from tramplin.services.course_plans import CoursePlanService
 
-router = APIRouter(route_class=DishkaRoute)
+router = APIRouter(tags=["authoring:course-plans"], route_class=DishkaRoute)
 
 
 @router.post("/course-plans/apply")
