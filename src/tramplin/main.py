@@ -15,6 +15,13 @@ from tramplin.logging import configure_logging
 OPENAPI_TAGS: list[dict[str, str]] = [
     {"name": "health", "description": "Проверки живости и готовности сервиса."},
     {"name": "auth", "description": "Вход через OAuth-провайдеров, сессии, профиль."},
+    {
+        "name": "oauth",
+        "description": (
+            "OAuth 2.0 authorization server для MCP-клиентов: authorize/token/"
+            "introspect/revoke и подтверждение доступа преподавателем."
+        ),
+    },
     {"name": "content", "description": "Публичный каталог: треки, курсы, уроки, тесты."},
     {"name": "news", "description": "Новостная лента."},
     {"name": "users", "description": "Публичные профили пользователей."},

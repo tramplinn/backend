@@ -10,7 +10,7 @@ import pytest
 import uuid_utils.compat as uuid
 
 from tests.conftest import AuthEnv
-from tramplin.api.v1.auth import _basic_client, _urlencoded
+from tramplin.api.v1.oauth import _basic_client, _urlencoded
 from tramplin.core.config import Settings
 from tramplin.core.errors import ForbiddenError, UserInactiveError
 from tramplin.core.security import sha256_hex
