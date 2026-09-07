@@ -5,11 +5,11 @@ from tramplin.api.dependencies import TeacherUser
 from tramplin.api.schemas.course_plans import CoursePlanApply, CoursePlanApplyOut
 from tramplin.services.course_plans import CoursePlanService
 
-router = APIRouter(tags=["authoring:course-plans"], route_class=DishkaRoute)
+router = APIRouter(prefix="/course-plans", tags=["authoring:course-plans"], route_class=DishkaRoute)
 
 
 @router.post(
-    "/course-plans/apply",
+    "/apply",
     summary="Применить план курса",
     description=(
         "Массово создаёт или обновляет структуру курса (модули, уроки, тесты) из "

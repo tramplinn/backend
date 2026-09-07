@@ -6,11 +6,11 @@ from tramplin.api.recommendation_mapping import recommended_algorithm_out, recom
 from tramplin.api.schemas.recommendations import RecommendationsOut
 from tramplin.services.recommendations import RecommendationService
 
-router = APIRouter(tags=["recommendations"], route_class=DishkaRoute)
+router = APIRouter(prefix="/recommendations", tags=["recommendations"], route_class=DishkaRoute)
 
 
 @router.get(
-    "/recommendations",
+    "",
     summary="Персональные рекомендации",
     description=(
         "Курсы и алгоритмические задачи, подобранные под прогресс текущего "

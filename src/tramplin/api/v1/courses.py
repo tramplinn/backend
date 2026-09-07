@@ -14,11 +14,11 @@ from tramplin.core.config import Settings
 from tramplin.models.content import Course
 from tramplin.services.courses import CourseService
 
-router = APIRouter(tags=["authoring:courses"], route_class=DishkaRoute)
+router = APIRouter(prefix="/courses", tags=["authoring:courses"], route_class=DishkaRoute)
 
 
 @router.get(
-    "/courses",
+    "",
     summary="Список курсов (автор)",
     description="Все курсы, включая черновики, для авторской панели.",
 )
@@ -34,7 +34,7 @@ async def list_courses(
 
 
 @router.get(
-    "/courses/{slug}",
+    "/{slug}",
     summary="Курс по slug (автор)",
     description="Полное дерево курса вместе с черновиками модулей и уроков.",
 )
@@ -53,7 +53,7 @@ async def get_course(
 
 
 @router.post(
-    "/courses",
+    "",
     status_code=status.HTTP_201_CREATED,
     summary="Создать курс",
     description="Создаёт курс как черновик; теги указываются по имени и создаются при отсутствии.",
@@ -73,7 +73,7 @@ async def create_course(
 
 
 @router.patch(
-    "/courses/{course_id}",
+    "/{course_id}",
     summary="Изменить курс",
     description="Частичное обновление; передаются только изменённые поля.",
 )
@@ -91,7 +91,7 @@ async def update_course(
 
 
 @router.delete(
-    "/courses/{course_id}",
+    "/{course_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить курс",
     description="Безвозвратно удаляет курс вместе с модулями и уроками.",
