@@ -1,6 +1,6 @@
 import uuid_utils.compat as uuid
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from tramplin.api.content_mapping import course_out, course_tree_out
 from tramplin.api.dependencies import TeacherUser
@@ -10,6 +10,7 @@ from tramplin.api.schemas.courses import (
     CourseTreeOut,
     CourseUpdate,
 )
+from tramplin.api.schemas.pagination import PageOut
 from tramplin.core.config import Settings
 from tramplin.models.content import Course
 from tramplin.services.courses import CourseService
@@ -26,11 +27,18 @@ async def list_courses(
     _: TeacherUser,
     courses: FromDishka[CourseService],
     settings: FromDishka[Settings],
-) -> list[CourseOut]:
-    return [
-        course_out(course, asset_base_url=settings.s3_public_base_url)
-        for course in await courses.list(published_only=False)
-    ]
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> PageOut[CourseOut]:
+    page = await courses.list(published_only=False, limit=limit, offset=offset)
+    return PageOut(
+        items=[
+            course_out(course, asset_base_url=settings.s3_public_base_url) for course in page.items
+        ],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.get(

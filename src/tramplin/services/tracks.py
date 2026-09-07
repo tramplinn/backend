@@ -5,7 +5,7 @@ import uuid_utils.compat as uuid
 
 from tramplin.core.errors import NotFoundError
 from tramplin.models.content import Track, TrackCourse
-from tramplin.services.contracts import Transaction
+from tramplin.services.contracts import PageResult, Transaction
 from tramplin.services.courses import CourseRepositoryPort
 from tramplin.services.entity_updates import (
     apply_order_by,
@@ -17,7 +17,9 @@ from tramplin.services.entity_updates import (
 
 
 class TrackRepositoryPort(Protocol):
-    async def list(self, *, published_only: bool) -> list[Track]: ...
+    async def list(
+        self, *, published_only: bool, limit: int, offset: int
+    ) -> tuple[list[Track], int]: ...
 
     async def get(self, track_id: uuid.UUID) -> Track | None: ...
 
@@ -53,8 +55,13 @@ class TrackService:
         self._tracks = tracks
         self._courses = courses
 
-    async def list(self, *, published_only: bool = True) -> list[Track]:
-        return await self._tracks.list(published_only=published_only)
+    async def list(
+        self, *, published_only: bool = True, limit: int = 20, offset: int = 0
+    ) -> PageResult[Track]:
+        items, total = await self._tracks.list(
+            published_only=published_only, limit=limit, offset=offset
+        )
+        return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def get(self, slug: str, *, published_only: bool = True) -> Track:
         return require(

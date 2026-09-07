@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 import uuid_utils.compat as uuid
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from tramplin.infrastructure.repositories.base import Repository
@@ -10,7 +10,13 @@ from tramplin.models.enums import ContentStatus
 
 
 class TrackRepository(Repository):
-    async def list(self, *, published_only: bool) -> list[Track]:
+    async def list(
+        self,
+        *,
+        published_only: bool,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Track], int]:
         stmt = (
             select(Track)
             .order_by(Track.title)
@@ -23,9 +29,13 @@ class TrackRepository(Repository):
                 .selectinload(Course.tags),
             )
         )
+        count_stmt = select(func.count()).select_from(Track)
         if published_only:
             stmt = stmt.where(Track.status == ContentStatus.PUBLISHED)
-        return list(await self._session.scalars(stmt))
+            count_stmt = count_stmt.where(Track.status == ContentStatus.PUBLISHED)
+        total = await self._session.scalar(count_stmt)
+        items = await self._session.scalars(stmt.limit(limit).offset(offset))
+        return list(items), total or 0
 
     async def get(self, track_id: uuid.UUID) -> Track | None:
         stmt = (

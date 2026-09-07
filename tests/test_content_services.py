@@ -7,6 +7,9 @@ from sqlalchemy import inspect
 
 from tests.fakes import FakeSession
 from tramplin.api.content_mapping import module_tree_out
+from tramplin.api.v1 import content as content_routes
+from tramplin.api.v1 import courses as authoring_courses_routes
+from tramplin.api.v1 import tracks as authoring_tracks_routes
 from tramplin.core.errors import (
     ConflictError,
     InvalidLessonContentError,
@@ -48,11 +51,15 @@ def content_model_kwargs() -> dict[str, Any]:
     return {"title": "Title", "slug": "title", "status": ContentStatus.DRAFT}
 
 
+def fake_settings() -> Any:
+    return SimpleNamespace(s3_public_base_url="https://cdn.test")
+
+
 async def test_course_service_crud_and_not_found() -> None:
     course = Course(**content_model_kwargs())
     session = FakeSession()
     repository = dependency(
-        list=AsyncMock(return_value=[course]),
+        list=AsyncMock(return_value=([course], 1)),
         get=AsyncMock(return_value=course),
         get_by_slug=AsyncMock(return_value=course),
         add=Mock(),
@@ -63,7 +70,14 @@ async def test_course_service_crud_and_not_found() -> None:
     service = CourseService(session, repository, assets, tags)
     actor = new_id()
 
-    assert await service.list(published_only=False) == [course]
+    assert (await service.list(published_only=False)).items == [course]
+    settings = fake_settings()
+    public_page = await content_routes.list_courses(service, settings, limit=20, offset=0)
+    assert public_page.items[0].title == course.title
+    author_page = await authoring_courses_routes.list_courses(
+        cast(Any, None), service, settings, limit=20, offset=0
+    )
+    assert author_page.total == 1
     assert await service.get("title", published_only=False) is course
     assert await service.create(course, [], actor) is course
     assert await service.update(course.id, {"title": "Updated"}, actor) is course
@@ -314,7 +328,7 @@ async def test_track_service_crud_attach_and_detach() -> None:
     course = Course(**content_model_kwargs())
     session = FakeSession()
     tracks = dependency(
-        list=AsyncMock(return_value=[track]),
+        list=AsyncMock(return_value=([track], 1)),
         get=AsyncMock(return_value=track),
         get_for_update=AsyncMock(return_value=track),
         get_by_slug=AsyncMock(return_value=track),
@@ -329,7 +343,14 @@ async def test_track_service_crud_attach_and_detach() -> None:
     service = TrackService(session, tracks, courses)
     actor = new_id()
 
-    assert await service.list(published_only=False) == [track]
+    assert (await service.list(published_only=False)).items == [track]
+    settings = fake_settings()
+    public_page = await content_routes.list_tracks(service, settings, limit=20, offset=0)
+    assert public_page.items[0].title == track.title
+    author_page = await authoring_tracks_routes.list_tracks(
+        cast(Any, None), service, settings, limit=20, offset=0
+    )
+    assert author_page.total == 1
     assert await service.get("title", published_only=False) is track
     assert await service.create(track, actor) is track
     assert await service.update(track.id, {"title": "Updated"}, actor) is track

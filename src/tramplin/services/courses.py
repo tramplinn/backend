@@ -6,7 +6,7 @@ import uuid_utils.compat as uuid
 from tramplin.core.errors import NotFoundError
 from tramplin.models.content import Course
 from tramplin.services.assets import AssetRepositoryPort, resolve_image_asset
-from tramplin.services.contracts import Transaction
+from tramplin.services.contracts import PageResult, Transaction
 from tramplin.services.entity_updates import (
     mark_created,
     mark_updated,
@@ -17,7 +17,9 @@ from tramplin.services.tags import TagRepositoryPort
 
 
 class CourseRepositoryPort(Protocol):
-    async def list(self, *, published_only: bool) -> list[Course]: ...
+    async def list(
+        self, *, published_only: bool, limit: int, offset: int
+    ) -> tuple[list[Course], int]: ...
 
     async def get(self, course_id: uuid.UUID) -> Course | None: ...
 
@@ -41,8 +43,13 @@ class CourseService:
         self._assets = assets
         self._tags = tags
 
-    async def list(self, *, published_only: bool = True) -> list[Course]:
-        return await self._courses.list(published_only=published_only)
+    async def list(
+        self, *, published_only: bool = True, limit: int = 20, offset: int = 0
+    ) -> PageResult[Course]:
+        items, total = await self._courses.list(
+            published_only=published_only, limit=limit, offset=offset
+        )
+        return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def get(self, slug: str, *, published_only: bool = True) -> Course:
         return require(

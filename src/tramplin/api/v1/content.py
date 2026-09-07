@@ -1,6 +1,6 @@
 import uuid_utils.compat as uuid
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from tramplin.api.content_mapping import (
     course_out,
@@ -12,6 +12,7 @@ from tramplin.api.content_mapping import (
 from tramplin.api.schemas.courses import CourseOut, CourseTreeOut
 from tramplin.api.schemas.lessons import InterviewCardOut, LessonOut
 from tramplin.api.schemas.modules import ModuleDependencyOut
+from tramplin.api.schemas.pagination import PageOut
 from tramplin.api.schemas.quizzes import QuizOut
 from tramplin.api.schemas.tracks import TrackOut
 from tramplin.core.config import Settings
@@ -32,15 +33,19 @@ router = APIRouter(tags=["content"], route_class=DishkaRoute)
 async def list_tracks(
     tracks: FromDishka[TrackService],
     settings: FromDishka[Settings],
-) -> list[TrackOut]:
-    return [
-        track_out(
-            track,
-            published_only=True,
-            asset_base_url=settings.s3_public_base_url,
-        )
-        for track in await tracks.list()
-    ]
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> PageOut[TrackOut]:
+    page = await tracks.list(limit=limit, offset=offset)
+    return PageOut(
+        items=[
+            track_out(track, published_only=True, asset_base_url=settings.s3_public_base_url)
+            for track in page.items
+        ],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.get(
@@ -68,11 +73,18 @@ async def get_track(
 async def list_courses(
     courses: FromDishka[CourseService],
     settings: FromDishka[Settings],
-) -> list[CourseOut]:
-    return [
-        course_out(course, asset_base_url=settings.s3_public_base_url)
-        for course in await courses.list()
-    ]
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> PageOut[CourseOut]:
+    page = await courses.list(limit=limit, offset=offset)
+    return PageOut(
+        items=[
+            course_out(course, asset_base_url=settings.s3_public_base_url) for course in page.items
+        ],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.get(

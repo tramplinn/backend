@@ -123,8 +123,8 @@ async def test_asset_course_and_group_repositories() -> None:
     course = Course(title="Course", slug="course", status=ContentStatus.PUBLISHED)
     course_session = session_with(course)
     courses = CourseRepository(course_session)
-    assert await courses.list(published_only=True) == [course]
-    assert await courses.list(published_only=False) == [course]
+    assert await courses.list(published_only=True, limit=10, offset=0) == ([course], 1)
+    assert await courses.list(published_only=False, limit=10, offset=0) == ([course], 1)
     assert await courses.get(course.id) is course
     assert await courses.get_by_slug("course", published_only=True) is course
     assert await courses.get_by_slug("course", published_only=False) is course
@@ -402,8 +402,8 @@ async def test_track_and_user_repositories() -> None:
     link = TrackCourse(track_id=track.id, course_id=course.id, position=0)
     track_session = session_with(track)
     tracks = TrackRepository(track_session)
-    assert await tracks.list(published_only=True) == [track]
-    assert await tracks.list(published_only=False) == [track]
+    assert await tracks.list(published_only=True, limit=10, offset=0) == ([track], 1)
+    assert await tracks.list(published_only=False, limit=10, offset=0) == ([track], 1)
     assert await tracks.get(track.id) is track
     assert await tracks.get_for_update(track.id) is track
     lock_statement = track_session.scalars.await_args.args[0]
