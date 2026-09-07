@@ -55,6 +55,7 @@ from tramplin.services.algorithm_ports import (
 )
 from tramplin.services.contracts import (
     CodeRunner,
+    PageResult,
     RunnerLanguage,
     RunRequest,
     SubmissionQueue,
@@ -95,8 +96,11 @@ class AlgorithmAuthoringService:
             NotFoundError("Алгоритмическая задача не найдена"),
         )
 
-    async def list_problems(self) -> list[AlgorithmProblem]:
-        return await self._algorithms.list_problems()
+    async def list_problems(
+        self, *, limit: int = 20, offset: int = 0
+    ) -> PageResult[AlgorithmProblem]:
+        items, total = await self._algorithms.list_problems(limit=limit, offset=offset)
+        return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def create_problem(
         self, problem: AlgorithmProblem, tag_names: list[str], actor_id: uuid.UUID
@@ -284,8 +288,9 @@ class AlgorithmAuthoringService:
             NotFoundError("Набор практики не найден"),
         )
 
-    async def list_sets(self) -> list[PracticeSet]:
-        return await self._algorithms.list_sets()
+    async def list_sets(self, *, limit: int = 20, offset: int = 0) -> PageResult[PracticeSet]:
+        items, total = await self._algorithms.list_sets(limit=limit, offset=offset)
+        return PageResult(items=items, total=total, limit=limit, offset=offset)
 
     async def delete_set(self, set_id: uuid.UUID) -> None:
         await self._algorithms.delete_set(await self.get_set(set_id))

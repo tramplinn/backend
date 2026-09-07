@@ -98,8 +98,9 @@ class AlgorithmsFake:
         self.hour_count = 0
         self.problem_count = 0
 
-    async def list_problems(self) -> list[AlgorithmProblem]:
-        return list(self.problems.values())
+    async def list_problems(self, *, limit: int, offset: int) -> tuple[list[AlgorithmProblem], int]:
+        items = list(self.problems.values())
+        return items[offset : offset + limit], len(items)
 
     async def list_published_problems(
         self,
@@ -188,8 +189,9 @@ class AlgorithmsFake:
         self.sets[practice_set.id] = practice_set
         return practice_set
 
-    async def list_sets(self) -> list[PracticeSet]:
-        return list(self.sets.values())
+    async def list_sets(self, *, limit: int, offset: int) -> tuple[list[PracticeSet], int]:
+        items = list(self.sets.values())
+        return items[offset : offset + limit], len(items)
 
     async def delete_set(self, practice_set: PracticeSet) -> None:
         del self.sets[practice_set.id]

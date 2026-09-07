@@ -1,6 +1,6 @@
 import uuid_utils.compat as uuid
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from tramplin.api.algorithm_mapping import problem_author_out, set_out
 from tramplin.api.dependencies import TeacherUser
@@ -19,6 +19,7 @@ from tramplin.api.schemas.algorithms import (
     TestCaseOut,
     TestCaseUpdate,
 )
+from tramplin.api.schemas.pagination import PageOut
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmTestCase, PracticeSet
 from tramplin.services.algorithms import AlgorithmAuthoringService
 
@@ -33,8 +34,16 @@ router = APIRouter(tags=["authoring:algorithms"], route_class=DishkaRoute)
 async def list_problems(
     _: TeacherUser,
     service: FromDishka[AlgorithmAuthoringService],
-) -> list[ProblemAuthorOut]:
-    return [problem_author_out(item) for item in await service.list_problems()]
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> PageOut[ProblemAuthorOut]:
+    page = await service.list_problems(limit=limit, offset=offset)
+    return PageOut(
+        items=[problem_author_out(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.post(
@@ -227,8 +236,16 @@ async def get_set(
 async def list_sets(
     _: TeacherUser,
     service: FromDishka[AlgorithmAuthoringService],
-) -> list[PracticeSetOut]:
-    return [set_out(item) for item in await service.list_sets()]
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> PageOut[PracticeSetOut]:
+    page = await service.list_sets(limit=limit, offset=offset)
+    return PageOut(
+        items=[set_out(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.patch(

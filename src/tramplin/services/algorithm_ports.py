@@ -21,7 +21,9 @@ from tramplin.models.tags import Tag
 
 
 class AlgorithmAuthoringRepositoryPort(Protocol):
-    async def list_problems(self) -> list[AlgorithmProblem]: ...
+    async def list_problems(
+        self, *, limit: int, offset: int
+    ) -> tuple[list[AlgorithmProblem], int]: ...
 
     async def get_problem(
         self, problem_id: uuid.UUID, *, published_only: bool
@@ -47,7 +49,7 @@ class AlgorithmAuthoringRepositoryPort(Protocol):
 
     async def get_set(self, set_id: uuid.UUID, *, published_only: bool) -> PracticeSet | None: ...
 
-    async def list_sets(self) -> list[PracticeSet]: ...
+    async def list_sets(self, *, limit: int, offset: int) -> tuple[list[PracticeSet], int]: ...
 
     def add_set(self, practice_set: PracticeSet) -> PracticeSet: ...
 

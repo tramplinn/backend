@@ -36,7 +36,7 @@ _DIFFICULTY_ORDER = case(
 
 
 class AlgorithmRepository(Repository):
-    async def list_problems(self) -> list[AlgorithmProblem]:
+    async def list_problems(self, *, limit: int, offset: int) -> tuple[list[AlgorithmProblem], int]:
         stmt = (
             select(AlgorithmProblem)
             .order_by(AlgorithmProblem.created_at.desc())
@@ -46,7 +46,9 @@ class AlgorithmRepository(Repository):
                 selectinload(AlgorithmProblem.tags),
             )
         )
-        return list(await self._session.scalars(stmt))
+        total = await self._session.scalar(select(func.count()).select_from(AlgorithmProblem))
+        items = await self._session.scalars(stmt.limit(limit).offset(offset))
+        return list(items), total or 0
 
     async def get_problem(
         self, problem_id: uuid.UUID, *, published_only: bool
@@ -161,13 +163,15 @@ class AlgorithmRepository(Repository):
             stmt = stmt.where(PracticeSet.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
 
-    async def list_sets(self) -> list[PracticeSet]:
+    async def list_sets(self, *, limit: int, offset: int) -> tuple[list[PracticeSet], int]:
         stmt = (
             select(PracticeSet)
             .order_by(PracticeSet.created_at.desc())
             .options(selectinload(PracticeSet.problems).selectinload(PracticeSetProblem.problem))
         )
-        return list(await self._session.scalars(stmt))
+        total = await self._session.scalar(select(func.count()).select_from(PracticeSet))
+        items = await self._session.scalars(stmt.limit(limit).offset(offset))
+        return list(items), total or 0
 
     def add_set(self, practice_set: PracticeSet) -> PracticeSet:
         self._session.add(practice_set)
