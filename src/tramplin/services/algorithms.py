@@ -288,10 +288,6 @@ class AlgorithmAuthoringService:
             NotFoundError("Набор практики не найден"),
         )
 
-    async def list_sets(self, *, limit: int = 20, offset: int = 0) -> PageResult[PracticeSet]:
-        items, total = await self._algorithms.list_sets(limit=limit, offset=offset)
-        return PageResult(items=items, total=total, limit=limit, offset=offset)
-
     async def delete_set(self, set_id: uuid.UUID) -> None:
         await self._algorithms.delete_set(await self.get_set(set_id))
         await self._transaction.commit()

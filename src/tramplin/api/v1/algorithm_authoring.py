@@ -228,26 +228,6 @@ async def get_set(
     return set_out(await service.get_set(set_id))
 
 
-@router.get(
-    "/practice-sets",
-    summary="Список наборов практики (автор)",
-    description="Все наборы практики, включая черновики, для авторской панели.",
-)
-async def list_sets(
-    _: TeacherUser,
-    service: FromDishka[AlgorithmAuthoringService],
-    limit: int = Query(default=20, ge=1, le=50),
-    offset: int = Query(default=0, ge=0),
-) -> PageOut[PracticeSetOut]:
-    page = await service.list_sets(limit=limit, offset=offset)
-    return PageOut(
-        items=[set_out(item) for item in page.items],
-        total=page.total,
-        limit=page.limit,
-        offset=page.offset,
-    )
-
-
 @router.patch(
     "/practice-sets/{set_id}",
     summary="Изменить набор практики",

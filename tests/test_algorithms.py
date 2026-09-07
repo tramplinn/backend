@@ -189,10 +189,6 @@ class AlgorithmsFake:
         self.sets[practice_set.id] = practice_set
         return practice_set
 
-    async def list_sets(self, *, limit: int, offset: int) -> tuple[list[PracticeSet], int]:
-        items = list(self.sets.values())
-        return items[offset : offset + limit], len(items)
-
     async def delete_set(self, practice_set: PracticeSet) -> None:
         del self.sets[practice_set.id]
 

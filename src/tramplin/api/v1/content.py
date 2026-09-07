@@ -5,12 +5,11 @@ from fastapi import APIRouter, Query
 from tramplin.api.content_mapping import (
     course_out,
     course_tree_out,
-    lesson_out,
     quiz_out,
     track_out,
 )
 from tramplin.api.schemas.courses import CourseOut, CourseTreeOut
-from tramplin.api.schemas.lessons import InterviewCardOut, LessonOut
+from tramplin.api.schemas.lessons import InterviewCardOut
 from tramplin.api.schemas.modules import ModuleDependencyOut
 from tramplin.api.schemas.pagination import PageOut
 from tramplin.api.schemas.quizzes import QuizOut
@@ -117,15 +116,6 @@ async def list_module_dependencies(
         ModuleDependencyOut.model_validate(dependency)
         for dependency in await modules.list_dependencies(slug)
     ]
-
-
-@router.get(
-    "/lessons/{lesson_id}",
-    summary="Урок по id",
-    description="Публичный урок; черновики доступны только через authoring-роут.",
-)
-async def get_lesson(lesson_id: uuid.UUID, lessons: FromDishka[LessonService]) -> LessonOut:
-    return lesson_out(await lessons.get(lesson_id))
 
 
 @router.get(
