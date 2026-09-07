@@ -11,11 +11,10 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
+from tramplin.models.base import Base, UUIDPrimaryKey
 from tramplin.models.content import Lesson, Module, position_unique, status_column
 from tramplin.models.enums import ContentStatus, QuestionType
 
@@ -35,7 +34,7 @@ quiz_question_assets = Table(
 )
 
 
-class Quiz(UUIDPrimaryKey, SoftDeleteMixin):
+class Quiz(UUIDPrimaryKey):
     """Тест модуля (lesson_id IS NULL) либо конкретного урока внутри этого модуля."""
 
     __tablename__ = "quizzes"
@@ -46,13 +45,7 @@ class Quiz(UUIDPrimaryKey, SoftDeleteMixin):
             name="fk_quizzes_lesson_id_module_id_lessons",
             ondelete="CASCADE",
         ),
-        Index(
-            "uq_quizzes_module_id_slug",
-            "module_id",
-            "slug",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
+        UniqueConstraint("module_id", "slug", name="uq_quizzes_module_id_slug"),
         UniqueConstraint("id", "module_id", name="uq_quizzes_id_module_id"),
     )
 

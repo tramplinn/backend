@@ -1,21 +1,16 @@
 import uuid_utils.compat as uuid
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import aliased, selectinload
 
-from tramplin.core.time import utc_now
 from tramplin.infrastructure.repositories.base import Repository
-from tramplin.models.base import soft_delete
-from tramplin.models.content import Lesson, Module, ModuleDep, ModuleItem
+from tramplin.models.content import Module, ModuleDep, ModuleItem
 from tramplin.models.enums import ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
 
 
 class ModuleRepository(Repository):
     async def get(self, module_id: uuid.UUID) -> Module | None:
-        # session.get() читает из identity map в обход глобального soft-delete
-        # фильтра, если объект уже был загружен раньше в этом же запросе.
-        module = await self._session.get(Module, module_id)
-        return None if module is None or module.is_deleted else module
+        return await self._session.get(Module, module_id)
 
     async def get_for_update(self, module_id: uuid.UUID) -> Module | None:
         stmt = select(Module).where(Module.id == module_id).with_for_update()
@@ -57,18 +52,9 @@ class ModuleRepository(Repository):
         return item
 
     async def delete_cascade(self, module: Module) -> None:
-        # ORM cascade="delete-orphan" не сработает на просто выставленный флаг,
-        # поэтому уроки и тесты модуля помечаем удалёнными явно, одним UPDATE.
-        soft_delete(module)
-        now = utc_now()
-        await self._session.execute(
-            update(Lesson)
-            .where(Lesson.module_id == module.id)
-            .values(is_deleted=True, deleted_at=now)
-        )
-        await self._session.execute(
-            update(Quiz).where(Quiz.module_id == module.id).values(is_deleted=True, deleted_at=now)
-        )
+        # Уроки, тесты и элементы ленты модуля каскадно удаляются на уровне БД
+        # (FK ondelete="CASCADE"), отдельного обхода дерева не требуется.
+        await self.delete(module)
 
     async def list_dependencies(
         self,

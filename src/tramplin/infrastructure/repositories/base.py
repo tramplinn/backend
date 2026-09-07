@@ -1,6 +1,7 @@
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tramplin.models.base import SoftDeleteMixin, soft_delete
+from tramplin.models.base import UUIDPrimaryKey
 
 
 class Repository:
@@ -11,5 +12,8 @@ class Repository:
         self._session.add(entity)
         return entity
 
-    async def delete(self, entity: SoftDeleteMixin) -> None:
-        soft_delete(entity)
+    async def delete(self, entity: UUIDPrimaryKey) -> None:
+        # DELETE по id, а не session.delete(): дочерние сущности снимаются каскадом
+        # на уровне БД (FK ondelete="CASCADE"), без подгрузки ORM-связей.
+        cls = type(entity)
+        await self._session.execute(delete(cls).where(cls.id == entity.id))

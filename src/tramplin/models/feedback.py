@@ -3,13 +3,13 @@ from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tramplin.models.assets import Asset
-from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
+from tramplin.models.base import Base, UUIDPrimaryKey
 from tramplin.models.content import position_unique
 from tramplin.models.enums import FeedbackStatus
 from tramplin.models.users import User
 
 
-class Feedback(UUIDPrimaryKey, SoftDeleteMixin):
+class Feedback(UUIDPrimaryKey):
     """Сообщение из виджета обратной связи.
 
     author_id обнуляется вместе с пользователем, а не удаляет сообщение: разбирать

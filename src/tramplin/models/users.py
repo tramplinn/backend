@@ -9,11 +9,11 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import SoftDeleteMixin, UUIDPrimaryKey
+from tramplin.models.base import UUIDPrimaryKey
 from tramplin.models.enums import IdentityProvider, UserRole
 
 
@@ -50,28 +50,13 @@ class User(UUIDPrimaryKey):
     )
 
 
-class UserIdentity(UUIDPrimaryKey, SoftDeleteMixin):
-    """Способ входа. Связывание по email запрещено — только явным действием пользователя.
-
-    Отвязку делаем мягкой: иначе повторно привязать тот же GitHub/Яндекс аккаунт
-    было бы нельзя без обхода уникальности по (provider, provider_id)."""
+class UserIdentity(UUIDPrimaryKey):
+    """Способ входа. Связывание по email запрещено — только явным действием пользователя."""
 
     __tablename__ = "user_identities"
     __table_args__ = (
-        Index(
-            "uq_user_identities_provider_provider_id",
-            "provider",
-            "provider_id",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
-        Index(
-            "uq_user_identities_user_id_provider",
-            "user_id",
-            "provider",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
+        UniqueConstraint("provider", "provider_id", name="uq_user_identities_provider_provider_id"),
+        UniqueConstraint("user_id", "provider", name="uq_user_identities_user_id_provider"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))

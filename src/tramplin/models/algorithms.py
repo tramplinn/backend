@@ -13,12 +13,11 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
+from tramplin.models.base import Base, UUIDPrimaryKey
 from tramplin.models.content import position_unique, status_column
 from tramplin.models.enums import (
     AlgorithmDifficulty,
@@ -42,7 +41,7 @@ algorithm_problem_tags = Table(
 )
 
 
-class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
+class AlgorithmProblem(UUIDPrimaryKey):
     __tablename__ = "algorithm_problems"
     __table_args__ = (
         CheckConstraint("time_limit_ms BETWEEN 50 AND 5000", name="algorithm_problem_time"),
@@ -80,19 +79,10 @@ class AlgorithmProblem(UUIDPrimaryKey, SoftDeleteMixin):
     )
 
 
-class AlgorithmTestCase(UUIDPrimaryKey, SoftDeleteMixin):
+class AlgorithmTestCase(UUIDPrimaryKey):
     __tablename__ = "algorithm_test_cases"
     __table_args__ = (
-        # Не position_unique: тест-кейсы никогда не переставляются пачкой (в отличие
-        # от practice_set_problems), а deferred-констрейнт нельзя сделать partial —
-        # тогда позиция мягко удалённого теста блокировала бы её для нового.
-        Index(
-            "uq_algorithm_test_cases_problem_id_position",
-            "problem_id",
-            "position",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
+        position_unique("algorithm_test_cases", "problem_id"),
         CheckConstraint("weight > 0", name="algorithm_test_case_weight"),
     )
 
@@ -122,7 +112,7 @@ class AlgorithmTemplate(Base):
     problem: Mapped[AlgorithmProblem] = relationship(back_populates="templates")
 
 
-class PracticeSet(UUIDPrimaryKey, SoftDeleteMixin):
+class PracticeSet(UUIDPrimaryKey):
     __tablename__ = "practice_sets"
 
     title: Mapped[str] = mapped_column(String(200))

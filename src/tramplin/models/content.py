@@ -14,11 +14,10 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import Base, SoftDeleteMixin, UUIDPrimaryKey
+from tramplin.models.base import Base, UUIDPrimaryKey
 from tramplin.models.enums import ContentStatus
 from tramplin.models.recommendations import EMBEDDING_DIM
 from tramplin.models.tags import Tag
@@ -51,11 +50,9 @@ def position_unique(table: str, parent: str) -> UniqueConstraint:
     )
 
 
-class Track(UUIDPrimaryKey, SoftDeleteMixin):
+class Track(UUIDPrimaryKey):
     __tablename__ = "tracks"
-    __table_args__ = (
-        Index("uq_tracks_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")),
-    )
+    __table_args__ = (UniqueConstraint("slug", name="uq_tracks_slug"),)
 
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text())
@@ -70,11 +67,9 @@ class Track(UUIDPrimaryKey, SoftDeleteMixin):
     )
 
 
-class Course(UUIDPrimaryKey, SoftDeleteMixin):
+class Course(UUIDPrimaryKey):
     __tablename__ = "courses"
-    __table_args__ = (
-        Index("uq_courses_slug", "slug", unique=True, postgresql_where=text("NOT is_deleted")),
-    )
+    __table_args__ = (UniqueConstraint("slug", name="uq_courses_slug"),)
 
     title: Mapped[str] = mapped_column(String(200))
     summary: Mapped[str | None] = mapped_column(Text())
@@ -119,16 +114,10 @@ class TrackCourse(Base):
     course: Mapped[Course] = relationship(back_populates="tracks")
 
 
-class Module(UUIDPrimaryKey, SoftDeleteMixin):
+class Module(UUIDPrimaryKey):
     __tablename__ = "modules"
     __table_args__ = (
-        Index(
-            "uq_modules_course_id_slug",
-            "course_id",
-            "slug",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
+        UniqueConstraint("course_id", "slug", name="uq_modules_course_id_slug"),
         position_unique("modules", "course_id"),
         UniqueConstraint("id", "course_id", name="uq_modules_id_course_id"),
     )
@@ -225,16 +214,10 @@ class ModuleDep(Base):
     depends_on: Mapped[Module] = relationship(foreign_keys=[depends_on_id])
 
 
-class Lesson(UUIDPrimaryKey, SoftDeleteMixin):
+class Lesson(UUIDPrimaryKey):
     __tablename__ = "lessons"
     __table_args__ = (
-        Index(
-            "uq_lessons_module_id_slug",
-            "module_id",
-            "slug",
-            unique=True,
-            postgresql_where=text("NOT is_deleted"),
-        ),
+        UniqueConstraint("module_id", "slug", name="uq_lessons_module_id_slug"),
         UniqueConstraint("id", "module_id", name="uq_lessons_id_module_id"),
     )
 

@@ -1,18 +1,11 @@
 import enum
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import uuid_utils.compat as uuid
-from sqlalchemy import DateTime, Enum, ForeignKey, MetaData, event, func
+from sqlalchemy import DateTime, Enum, ForeignKey, MetaData, func
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    ORMExecuteState,
-    Session,
-    mapped_column,
-    with_loader_criteria,
-)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from tramplin.models.enums import (
     AlgorithmDifficulty,
@@ -110,32 +103,3 @@ class UUIDPrimaryKey(Base):
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} id={self.id}>"
-
-
-class SoftDeleteMixin:
-    """Помечает строку удалённой вместо DELETE. Строка остаётся в БД ради unique
-    и на случай восстановления — фильтрация из выдачи идёт глобально, ниже."""
-
-    __abstract__ = True
-
-    is_deleted: Mapped[bool] = mapped_column(default=False, server_default="false", sort_order=104)
-    deleted_at: Mapped[datetime | None] = mapped_column(default=None, sort_order=105)
-
-
-def soft_delete(entity: SoftDeleteMixin) -> None:
-    entity.is_deleted = True
-    entity.deleted_at = datetime.now(UTC)
-
-
-@event.listens_for(Session, "do_orm_execute")
-def _exclude_soft_deleted(state: ORMExecuteState) -> None:
-    """Единая точка фильтрации: без неё каждый репозиторий добавлял бы
-    .where(is_deleted=False) вручную и рано или поздно кто-то забыл бы."""
-    if state.is_select and not state.execution_options.get("include_deleted", False):
-        state.statement = state.statement.options(
-            with_loader_criteria(
-                SoftDeleteMixin,
-                lambda cls: cls.is_deleted.is_(False),
-                include_aliases=True,
-            )
-        )
