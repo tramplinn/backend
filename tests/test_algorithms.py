@@ -70,12 +70,17 @@ class TransactionFake:
 
 
 class RunnerFake:
-    def __init__(self, results: list[RunResult] | None = None) -> None:
+    def __init__(
+        self,
+        results: list[RunResult] | None = None,
+        languages: list[RunnerLanguage] | None = None,
+    ) -> None:
         self.requests: list[RunRequest] = []
         self.results = results or [RunResult("accepted", stdout="ok\n", runtime_ms=4, memory_kb=12)]
+        self._languages = languages or [RunnerLanguage("python", "Python 3")]
 
     async def languages(self) -> list[RunnerLanguage]:
-        return [RunnerLanguage("python", "Python 3")]
+        return self._languages
 
     async def submit(self, request: RunRequest) -> RunnerJob:
         self.requests.append(request)
@@ -501,7 +506,7 @@ async def test_authoring_practice_set_and_order(settings: Any) -> None:
 async def test_student_session_enqueue_limits_and_reflection(settings: Any) -> None:
     tx, repo = TransactionFake(), AlgorithmsFake()
     task, practice_set = published_course(repo)
-    service = AlgorithmPracticeService(tx, repo, settings)
+    service = AlgorithmPracticeService(tx, repo, RunnerFake(), settings)
     user = new_id()
     session = await service.start_session(practice_set.id, user)
     assert session.deadline_at is None
@@ -527,12 +532,32 @@ async def test_student_session_enqueue_limits_and_reflection(settings: Any) -> N
         await service.enqueue(session.id, task.id, user, SubmissionKind.SUBMIT, "python", "x")
 
 
+async def test_enqueue_allows_any_runner_language_even_without_a_template(settings: Any) -> None:
+    """Как на LeetCode: язык ограничен раннером, а не тем, что завёл автор задачи."""
+    tx, repo = TransactionFake(), AlgorithmsFake()
+    task, practice_set = published_course(repo)
+    assert {t.language for t in task.templates} == {"python"}
+    runner = RunnerFake(
+        languages=[RunnerLanguage("python", "Python 3"), RunnerLanguage("go", "Go")]
+    )
+    service = AlgorithmPracticeService(tx, repo, runner, settings)
+    user = new_id()
+    session = await service.start_session(practice_set.id, user)
+
+    run = await service.enqueue(
+        session.id, task.id, user, SubmissionKind.RUN, "go", "package main", "1"
+    )
+
+    assert run.status is SubmissionStatus.QUEUED
+    assert run.language == "go"
+
+
 async def test_catalog_lists_published_with_progress(settings: Any) -> None:
     repo = AlgorithmsFake()
     task, _ = published_course(repo)
     hidden = problem()
     repo.problems[hidden.id] = hidden
-    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    service = AlgorithmPracticeService(TransactionFake(), repo, RunnerFake(), settings)
     user = new_id()
 
     catalog = await service.list_catalog(user)
@@ -571,7 +596,7 @@ async def test_tag_service_lists_all_tags() -> None:
 async def test_catalog_filters(settings: Any) -> None:
     repo = AlgorithmsFake()
     task, _ = published_course(repo)
-    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    service = AlgorithmPracticeService(TransactionFake(), repo, RunnerFake(), settings)
     user = new_id()
 
     assert (await service.list_catalog(user, difficulty=AlgorithmDifficulty.HARD)).total == 0
@@ -583,7 +608,7 @@ async def test_catalog_filters(settings: Any) -> None:
 async def test_free_session_allows_any_published_problem(settings: Any) -> None:
     repo = AlgorithmsFake()
     task, _ = published_course(repo)
-    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    service = AlgorithmPracticeService(TransactionFake(), repo, RunnerFake(), settings)
     user = new_id()
 
     session = await service.start_free_session(user)
@@ -601,7 +626,7 @@ async def test_free_session_allows_any_published_problem(settings: Any) -> None:
 async def test_list_solutions_returns_accepted_submissions_newest_first(settings: Any) -> None:
     repo, tx = AlgorithmsFake(), TransactionFake()
     task, practice_set = published_course(repo)
-    practice_service = AlgorithmPracticeService(tx, repo, settings)
+    practice_service = AlgorithmPracticeService(tx, repo, RunnerFake(), settings)
     worker = AlgorithmWorkerService(tx, repo, RunnerFake(), settings)
     user = new_id()
     session = await practice_service.start_session(practice_set.id, user)
@@ -631,7 +656,7 @@ async def test_list_solutions_returns_accepted_submissions_newest_first(settings
 async def test_mock_session_expires(settings: Any) -> None:
     repo = AlgorithmsFake()
     task, practice_set = published_course(repo, PracticeMode.MOCK_INTERVIEW)
-    service = AlgorithmPracticeService(TransactionFake(), repo, settings)
+    service = AlgorithmPracticeService(TransactionFake(), repo, RunnerFake(), settings)
     user = new_id()
     session = await service.start_session(practice_set.id, user)
     assert session.deadline_at is not None
