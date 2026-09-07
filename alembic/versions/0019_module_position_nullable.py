@@ -26,4 +26,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("UPDATE modules SET position = 0 WHERE position IS NULL")
+    # UPDATE above queues a check for uq_modules_course_id_position (deferrable),
+    # which blocks the ALTER TABLE below unless flushed immediately.
+    op.execute("SET CONSTRAINTS uq_modules_course_id_position IMMEDIATE")
     op.alter_column("modules", "position", existing_type=sa.Integer(), nullable=False)
