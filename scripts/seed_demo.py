@@ -432,6 +432,8 @@ def health():
             for position, lesson_item in enumerate(lessons)
         ]
     modules[0].quizzes = [quiz]
+    session.add(quiz)
+    await session.flush()
     modules[0].items.append(
         ModuleItem(
             module_id=modules[0].id,
