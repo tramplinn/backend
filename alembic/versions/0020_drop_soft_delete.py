@@ -65,7 +65,28 @@ def upgrade() -> None:
         op.drop_column(table, "deleted_at")
         op.drop_column(table, "is_deleted")
 
-    op.execute("UPDATE modules SET position = 0 WHERE position IS NULL")
+    # A course can have several modules with NULL position (0019 frees the
+    # position of every soft-deleted module in a course), so assigning them
+    # all position=0 collides with uq_modules_course_id_position. Give each
+    # one a distinct position appended after the course's current max instead.
+    op.execute("""
+        WITH max_pos AS (
+            SELECT course_id, COALESCE(MAX(position), -1) AS max_position
+            FROM modules
+            GROUP BY course_id
+        ),
+        ranked AS (
+            SELECT id, course_id,
+                   ROW_NUMBER() OVER (PARTITION BY course_id ORDER BY id) AS rn
+            FROM modules
+            WHERE position IS NULL
+        )
+        UPDATE modules
+        SET position = max_pos.max_position + ranked.rn
+        FROM ranked
+        JOIN max_pos ON max_pos.course_id = ranked.course_id
+        WHERE modules.id = ranked.id
+    """)
     # UPDATE above queues a check for uq_modules_course_id_position (deferrable),
     # which blocks the ALTER TABLE below unless flushed immediately.
     op.execute("SET CONSTRAINTS uq_modules_course_id_position IMMEDIATE")
