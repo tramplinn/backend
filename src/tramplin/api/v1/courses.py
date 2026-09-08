@@ -11,9 +11,11 @@ from tramplin.api.schemas.courses import (
     CourseUpdate,
 )
 from tramplin.api.schemas.pagination import PageOut
+from tramplin.api.schemas.publish_cascade import PublishReportOut
 from tramplin.core.config import Settings
 from tramplin.models.content import Course
 from tramplin.services.courses import CourseService
+from tramplin.services.publish_cascade import PublishCascadeService
 
 router = APIRouter(prefix="/courses", tags=["authoring:courses"], route_class=DishkaRoute)
 
@@ -110,3 +112,20 @@ async def delete_course(
     courses: FromDishka[CourseService],
 ) -> None:
     await courses.delete(course_id)
+
+
+@router.post(
+    "/{course_id}/publish",
+    summary="Опубликовать всё содержимое курса",
+    description=(
+        "Публикует курс и всё, что в нём проходит валидацию (модули, уроки, тесты, "
+        "наборы практики); что не проходит — пропускает с причиной. Уже опубликованное "
+        "не трогает и публикацию не снимает."
+    ),
+)
+async def publish_course_cascade(
+    course_id: uuid.UUID,
+    user: TeacherUser,
+    publish: FromDishka[PublishCascadeService],
+) -> PublishReportOut:
+    return PublishReportOut.model_validate(await publish.publish_course(course_id, user.id))

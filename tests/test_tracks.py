@@ -121,3 +121,16 @@ async def test_reorder_courses_validates_track_and_exact_course_set() -> None:
         await service.reorder_courses(track.id, [course.id], new_id())
     with pytest.raises(ValueError):
         TrackCoursesOrder(course_ids=[course.id, course.id])
+
+
+async def test_get_tree_returns_track_or_raises_not_found() -> None:
+    track = Track(title="Backend", slug="backend")
+    service = TrackService(
+        FakeSession(),
+        cast(Any, TrackRepositoryFake(track, [])),
+        cast(Any, CourseRepositoryFake(Course(title="Python", slug="python"))),
+    )
+
+    assert await service.get_tree(track.id) is track
+    with pytest.raises(NotFoundError):
+        await service.get_tree(new_id())

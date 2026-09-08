@@ -5,9 +5,11 @@ from fastapi import APIRouter, Query, status
 from tramplin.api.content_mapping import track_out
 from tramplin.api.dependencies import TeacherUser
 from tramplin.api.schemas.pagination import PageOut
+from tramplin.api.schemas.publish_cascade import PublishReportOut
 from tramplin.api.schemas.tracks import TrackCoursesOrder, TrackCreate, TrackOut, TrackUpdate
 from tramplin.core.config import Settings
 from tramplin.models.content import Track
+from tramplin.services.publish_cascade import PublishCascadeService
 from tramplin.services.tracks import TrackService
 
 router = APIRouter(prefix="/tracks", tags=["authoring:tracks"], route_class=DishkaRoute)
@@ -151,3 +153,20 @@ async def delete_track(
     tracks: FromDishka[TrackService],
 ) -> None:
     await tracks.delete(track_id)
+
+
+@router.post(
+    "/{track_id}/publish",
+    summary="Опубликовать всё содержимое трека",
+    description=(
+        "Публикует трек и всё, что в нём проходит валидацию (курсы, модули, уроки, "
+        "тесты, наборы практики); что не проходит — пропускает с причиной. Уже "
+        "опубликованное не трогает и публикацию не снимает."
+    ),
+)
+async def publish_track_cascade(
+    track_id: uuid.UUID,
+    user: TeacherUser,
+    publish: FromDishka[PublishCascadeService],
+) -> PublishReportOut:
+    return PublishReportOut.model_validate(await publish.publish_track(track_id, user.id))

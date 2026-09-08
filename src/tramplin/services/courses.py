@@ -25,6 +25,8 @@ class CourseRepositoryPort(Protocol):
 
     async def get_by_slug(self, slug: str, *, published_only: bool) -> Course | None: ...
 
+    async def get_tree(self, course_id: uuid.UUID) -> Course | None: ...
+
     def add(self, course: Course) -> Course: ...
 
     async def delete_cascade(self, course: Course) -> None: ...
@@ -56,6 +58,9 @@ class CourseService:
             await self._courses.get_by_slug(slug, published_only=published_only),
             NotFoundError("Курс не найден"),
         )
+
+    async def get_tree(self, course_id: uuid.UUID) -> Course:
+        return require(await self._courses.get_tree(course_id), NotFoundError("Курс не найден"))
 
     async def create(self, course: Course, tag_names: Sequence[str], actor_id: uuid.UUID) -> Course:
         course.cover_asset = await resolve_image_asset(

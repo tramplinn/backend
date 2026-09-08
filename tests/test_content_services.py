@@ -9,6 +9,7 @@ from tests.fakes import FakeSession
 from tramplin.api.content_mapping import module_tree_out
 from tramplin.api.v1 import content as content_routes
 from tramplin.api.v1 import courses as authoring_courses_routes
+from tramplin.api.v1 import modules as authoring_modules_routes
 from tramplin.api.v1 import tracks as authoring_tracks_routes
 from tramplin.core.errors import (
     ConflictError,
@@ -62,6 +63,7 @@ async def test_course_service_crud_and_not_found() -> None:
         list=AsyncMock(return_value=([course], 1)),
         get=AsyncMock(return_value=course),
         get_by_slug=AsyncMock(return_value=course),
+        get_tree=AsyncMock(return_value=course),
         add=Mock(),
         delete_cascade=AsyncMock(),
     )
@@ -85,9 +87,15 @@ async def test_course_service_crud_and_not_found() -> None:
     assert course.title == "Updated"
     assert session.commits == 3
 
+    assert await service.get_tree(course.id) is course
+
     repository.get_by_slug.return_value = None
     with pytest.raises(NotFoundError):
         await service.get("missing")
+
+    repository.get_tree.return_value = None
+    with pytest.raises(NotFoundError):
+        await service.get_tree(course.id)
     repository.get.return_value = None
     with pytest.raises(NotFoundError):
         await service.update(new_id(), {}, actor)
@@ -499,3 +507,30 @@ async def test_module_service_reorder_requires_existing_course() -> None:
 
     with pytest.raises(NotFoundError):
         await service.reorder(new_id(), [], new_id())
+
+
+async def test_publish_cascade_routes_forward_to_the_service_and_map_the_report() -> None:
+    from tramplin.services.publish_cascade import PublishReport, PublishSkip
+
+    report = PublishReport(
+        published=[new_id()],
+        skipped=[PublishSkip(new_id(), "quiz", "Q", "Нельзя опубликовать тест без вопросов")],
+    )
+    publish = dependency(
+        publish_module=AsyncMock(return_value=report),
+        publish_course=AsyncMock(return_value=report),
+        publish_track=AsyncMock(return_value=report),
+    )
+    user = dependency(id=new_id())
+    module_id, course_id, track_id = new_id(), new_id(), new_id()
+
+    module_out = await authoring_modules_routes.publish_module_cascade(module_id, user, publish)
+    course_out = await authoring_courses_routes.publish_course_cascade(course_id, user, publish)
+    track_out = await authoring_tracks_routes.publish_track_cascade(track_id, user, publish)
+
+    publish.publish_module.assert_awaited_once_with(module_id, user.id)
+    publish.publish_course.assert_awaited_once_with(course_id, user.id)
+    publish.publish_track.assert_awaited_once_with(track_id, user.id)
+    for out in (module_out, course_out, track_out):
+        assert out.published == report.published
+        assert out.skipped[0].reason == "Нельзя опубликовать тест без вопросов"

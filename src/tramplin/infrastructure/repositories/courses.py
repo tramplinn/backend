@@ -7,6 +7,24 @@ from tramplin.models.content import Course, Module, ModuleItem
 from tramplin.models.enums import ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
 
+# Полное дерево курса: и get_by_slug (студенту/автору по slug), и get_tree
+# (каскадной публикации по id) должны грузить одно и то же.
+_TREE_OPTIONS = (
+    selectinload(Course.cover_asset),
+    selectinload(Course.tags),
+    selectinload(Course.modules).selectinload(Module.items).selectinload(ModuleItem.lesson),
+    selectinload(Course.modules)
+    .selectinload(Module.items)
+    .selectinload(ModuleItem.quiz)
+    .selectinload(Quiz.questions),
+    selectinload(Course.modules)
+    .selectinload(Module.items)
+    .selectinload(ModuleItem.quiz)
+    .selectinload(Quiz.questions)
+    .selectinload(QuizQuestion.attachments),
+    selectinload(Course.modules).selectinload(Module.items).selectinload(ModuleItem.practice_set),
+)
+
 
 class CourseRepository(Repository):
     async def list(
@@ -38,31 +56,13 @@ class CourseRepository(Repository):
         return (await self._session.scalars(stmt)).one_or_none()
 
     async def get_by_slug(self, slug: str, *, published_only: bool) -> Course | None:
-        stmt = (
-            select(Course)
-            .where(Course.slug == slug)
-            .options(
-                selectinload(Course.cover_asset),
-                selectinload(Course.tags),
-                selectinload(Course.modules)
-                .selectinload(Module.items)
-                .selectinload(ModuleItem.lesson),
-                selectinload(Course.modules)
-                .selectinload(Module.items)
-                .selectinload(ModuleItem.quiz)
-                .selectinload(Quiz.questions),
-                selectinload(Course.modules)
-                .selectinload(Module.items)
-                .selectinload(ModuleItem.quiz)
-                .selectinload(Quiz.questions)
-                .selectinload(QuizQuestion.attachments),
-                selectinload(Course.modules)
-                .selectinload(Module.items)
-                .selectinload(ModuleItem.practice_set),
-            )
-        )
+        stmt = select(Course).where(Course.slug == slug).options(*_TREE_OPTIONS)
         if published_only:
             stmt = stmt.where(Course.status == ContentStatus.PUBLISHED)
+        return (await self._session.scalars(stmt)).one_or_none()
+
+    async def get_tree(self, course_id: uuid.UUID) -> Course | None:
+        stmt = select(Course).where(Course.id == course_id).options(*_TREE_OPTIONS)
         return (await self._session.scalars(stmt)).one_or_none()
 
     async def delete_cascade(self, course: Course) -> None:

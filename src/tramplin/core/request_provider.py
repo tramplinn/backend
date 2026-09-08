@@ -31,6 +31,7 @@ from tramplin.infrastructure.s3_storage import S3Storage
 from tramplin.infrastructure.tutor_quota import TutorQuota
 from tramplin.infrastructure.yandex import YandexOAuthClient
 from tramplin.models.enums import IdentityProvider
+from tramplin.services.algorithm_plans import AlgorithmPlanService
 from tramplin.services.algorithms import (
     AlgorithmAuthoringService,
     AlgorithmOperationsService,
@@ -48,6 +49,7 @@ from tramplin.services.modules import ModuleService
 from tramplin.services.news import NewsService
 from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAuthRegistry
 from tramplin.services.progress import ProgressService
+from tramplin.services.publish_cascade import PublishCascadeService
 from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
 from tramplin.services.recommendations import RecommendationService
@@ -111,6 +113,15 @@ class RequestProvider(Provider):
         assets: AssetRepository,
     ) -> CoursePlanService:
         return CoursePlanService(session, courses, modules, lessons, quizzes, assets)
+
+    @provide
+    def algorithm_plan_service(
+        self,
+        session: AsyncSession,
+        algorithms: AlgorithmRepository,
+        tags: TagRepository,
+    ) -> AlgorithmPlanService:
+        return AlgorithmPlanService(session, algorithms, tags)
 
     @provide
     def mcp_oauth_service(
@@ -298,6 +309,20 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> AlgorithmPracticeService:
         return AlgorithmPracticeService(session, algorithms, settings)
+
+    @provide
+    def publish_cascade_service(
+        self,
+        modules: ModuleService,
+        courses: CourseService,
+        tracks: TrackService,
+        lessons: LessonService,
+        quizzes: QuizService,
+        algorithm_authoring: AlgorithmAuthoringService,
+    ) -> PublishCascadeService:
+        return PublishCascadeService(
+            modules, courses, tracks, lessons, quizzes, algorithm_authoring
+        )
 
     @provide
     def algorithm_worker_service(

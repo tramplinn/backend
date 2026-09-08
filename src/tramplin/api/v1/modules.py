@@ -13,9 +13,11 @@ from tramplin.api.schemas.modules import (
     ModuleTreeOut,
     ModuleUpdate,
 )
+from tramplin.api.schemas.publish_cascade import PublishReportOut
 from tramplin.core.config import Settings
 from tramplin.models.content import Module
 from tramplin.services.modules import ModuleService
+from tramplin.services.publish_cascade import PublishCascadeService
 
 router = APIRouter(tags=["authoring:modules"], route_class=DishkaRoute)
 
@@ -164,3 +166,20 @@ async def delete_module(
     modules: FromDishka[ModuleService],
 ) -> None:
     await modules.delete(module_id)
+
+
+@router.post(
+    "/modules/{module_id}/publish",
+    summary="Опубликовать всё содержимое модуля",
+    description=(
+        "Публикует модуль и всё, что в нём проходит валидацию (уроки, тесты, наборы "
+        "практики); что не проходит — пропускает с причиной. Уже опубликованное не "
+        "трогает и публикацию не снимает."
+    ),
+)
+async def publish_module_cascade(
+    module_id: uuid.UUID,
+    user: TeacherUser,
+    publish: FromDishka[PublishCascadeService],
+) -> PublishReportOut:
+    return PublishReportOut.model_validate(await publish.publish_module(module_id, user.id))

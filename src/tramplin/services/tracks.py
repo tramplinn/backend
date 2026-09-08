@@ -69,6 +69,9 @@ class TrackService:
             NotFoundError("Трек не найден"),
         )
 
+    async def get_tree(self, track_id: uuid.UUID) -> Track:
+        return require(await self._tracks.get(track_id), NotFoundError("Трек не найден"))
+
     async def create(self, track: Track, actor_id: uuid.UUID) -> Track:
         # Пустую коллекцию задаём явно: иначе после commit обращение к ней
         # уйдёт в ленивую подгрузку вне greenlet-контекста и упадёт.
