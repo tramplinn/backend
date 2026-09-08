@@ -20,8 +20,10 @@ from tramplin.api.schemas.algorithms import (
     TestCaseUpdate,
 )
 from tramplin.api.schemas.pagination import PageOut
+from tramplin.core.errors import NotFoundError
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmTestCase, PracticeSet
 from tramplin.services.algorithms import AlgorithmAuthoringService
+from tramplin.services.entity_updates import require
 
 router = APIRouter(tags=["authoring:algorithms"], route_class=DishkaRoute)
 
@@ -60,6 +62,21 @@ async def create_problem(
     tag_names = data.pop("tags")
     problem = AlgorithmProblem(statement_html="", **data)
     return problem_author_out(await service.create_problem(problem, tag_names, user.id))
+
+
+@router.get(
+    "/algorithms/problems/slug/{slug}",
+    summary="Задача по slug (автор)",
+    description="Включает черновики, тесты и служебные поля; используется MCP-сервером для diff.",
+)
+async def get_problem_by_slug(
+    slug: str, _: TeacherUser, service: FromDishka[AlgorithmAuthoringService]
+) -> ProblemAuthorOut:
+    problem = require(
+        await service.get_problem_by_slug(slug),
+        NotFoundError("Алгоритмическая задача не найдена"),
+    )
+    return problem_author_out(problem)
 
 
 @router.get(

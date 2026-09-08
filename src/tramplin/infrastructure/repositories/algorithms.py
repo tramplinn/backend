@@ -66,6 +66,18 @@ class AlgorithmRepository(Repository):
             stmt = stmt.where(AlgorithmProblem.status == ContentStatus.PUBLISHED)
         return (await self._session.scalars(stmt)).one_or_none()
 
+    async def get_problem_by_slug(self, slug: str) -> AlgorithmProblem | None:
+        stmt = (
+            select(AlgorithmProblem)
+            .where(AlgorithmProblem.slug == slug)
+            .options(
+                selectinload(AlgorithmProblem.test_cases),
+                selectinload(AlgorithmProblem.templates),
+                selectinload(AlgorithmProblem.tags),
+            )
+        )
+        return (await self._session.scalars(stmt)).one_or_none()
+
     async def list_published_problems(
         self,
         *,

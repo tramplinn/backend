@@ -18,9 +18,11 @@ from tramplin.models.enums import (
 )
 
 LANGUAGE_PATTERN = r"^(python|javascript|typescript|cpp|java|csharp|go|kotlin)$"
+SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 
 class ProblemCreate(ApiModel):
+    slug: str = Field(pattern=SLUG_PATTERN, max_length=120)
     provider: AlgorithmProvider = AlgorithmProvider.INTERNAL
     external_key: str | None = Field(default=None, max_length=200)
     external_url: HttpUrl | None = None
@@ -34,6 +36,7 @@ class ProblemCreate(ApiModel):
 
 
 class ProblemUpdate(ApiModel):
+    slug: str | None = Field(default=None, pattern=SLUG_PATTERN, max_length=120)
     provider: AlgorithmProvider | None = None
     external_key: str | None = Field(default=None, max_length=200)
     external_url: HttpUrl | None = None
@@ -89,6 +92,7 @@ class TemplateStudentOut(ApiModel):
 
 class ProblemAuthorOut(ApiModel):
     id: uuid.UUID
+    slug: str
     provider: AlgorithmProvider
     external_key: str | None
     external_url: str | None

@@ -54,6 +54,7 @@ class AlgorithmProblem(UUIDPrimaryKey):
         ),
     )
 
+    slug: Mapped[str] = mapped_column(String(120), unique=True)
     provider: Mapped[AlgorithmProvider] = mapped_column(default=AlgorithmProvider.INTERNAL)
     external_key: Mapped[str | None] = mapped_column(String(200))
     external_url: Mapped[str | None] = mapped_column(String(2048))

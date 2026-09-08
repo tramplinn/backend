@@ -25,6 +25,7 @@ from tramplin.models.enums import AlgorithmProgressStatus
 def problem_author_out(problem: AlgorithmProblem) -> ProblemAuthorOut:
     return ProblemAuthorOut(
         id=problem.id,
+        slug=problem.slug,
         provider=problem.provider,
         external_key=problem.external_key,
         external_url=problem.external_url,

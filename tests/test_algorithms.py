@@ -149,6 +149,9 @@ class AlgorithmsFake:
             else None
         )
 
+    async def get_problem_by_slug(self, slug: str) -> AlgorithmProblem | None:
+        return next((p for p in self.problems.values() if p.slug == slug), None)
+
     def add_problem(self, problem: AlgorithmProblem) -> AlgorithmProblem:
         self.problems[problem.id] = problem
         return problem
@@ -328,6 +331,7 @@ def problem(
     provider: AlgorithmProvider = AlgorithmProvider.INTERNAL,
 ) -> AlgorithmProblem:
     prob = AlgorithmProblem(
+        slug="two-sum",
         provider=provider,
         external_key=None,
         external_url=None,

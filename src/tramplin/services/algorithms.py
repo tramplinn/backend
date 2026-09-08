@@ -96,6 +96,9 @@ class AlgorithmAuthoringService:
             NotFoundError("Алгоритмическая задача не найдена"),
         )
 
+    async def get_problem_by_slug(self, slug: str) -> AlgorithmProblem | None:
+        return await self._algorithms.get_problem_by_slug(slug)
+
     async def list_problems(
         self, *, limit: int = 20, offset: int = 0
     ) -> PageResult[AlgorithmProblem]:
@@ -123,7 +126,8 @@ class AlgorithmAuthoringService:
             changes["statement_html"] = render_markdown(changes["statement_md"])
         if "tags" in changes:
             problem.tags = await self._tags.get_or_create_many(changes.pop("tags"))
-        validate_required_updates(changes, {"title", "difficulty", "status"})
+        validate_required_updates(changes, {"slug", "title", "difficulty", "status"})
+        problem.slug = changes.get("slug", problem.slug)
         problem.provider = changes.get("provider", problem.provider)
         problem.external_key = changes.get("external_key", problem.external_key)
         problem.external_url = changes.get("external_url", problem.external_url)
