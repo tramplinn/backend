@@ -295,10 +295,9 @@ class RequestProvider(Provider):
         self,
         session: AsyncSession,
         algorithms: AlgorithmRepository,
-        runner: CodeRunner,
         settings: Settings,
     ) -> AlgorithmPracticeService:
-        return AlgorithmPracticeService(session, algorithms, runner, settings)
+        return AlgorithmPracticeService(session, algorithms, settings)
 
     @provide
     def algorithm_worker_service(

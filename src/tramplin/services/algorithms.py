@@ -382,12 +382,10 @@ class AlgorithmPracticeService:
         self,
         transaction: Transaction,
         algorithms: AlgorithmPracticeRepositoryPort,
-        runner: CodeRunner,
         settings: Settings,
     ) -> None:
         self._transaction = transaction
         self._algorithms = algorithms
-        self._runner = runner
         self._settings = settings
 
     async def get_set(self, set_id: uuid.UUID) -> PracticeSet:
@@ -519,9 +517,8 @@ class AlgorithmPracticeService:
         problem = await self.get_problem(problem_id)
         if problem.provider is not AlgorithmProvider.INTERNAL:
             raise InvalidAlgorithmProblemError("Внешняя задача решается на сайте провайдера")
-        supported = {item.key for item in await self._runner.languages()}
-        if language not in supported:
-            raise InvalidAlgorithmProblemError("Язык не поддерживается исполнителем кода")
+        if language not in {template.language for template in problem.templates}:
+            raise InvalidAlgorithmProblemError("Язык не разрешён для этой задачи")
         await self._algorithms.lock_user(user_id)
         if await self._algorithms.active_submissions(user_id):
             raise RunnerBusyError()
