@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
 from tramplin.infrastructure.github import GitHubOAuthClient
+from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.judge0 import Judge0CodeRunner
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
@@ -89,6 +90,14 @@ class AppProvider(Provider):
         client: httpx.AsyncClient,
     ) -> YandexOAuthClient:
         return YandexOAuthClient(settings, client)
+
+    @provide
+    def gitlab_client(
+        self,
+        settings: Settings,
+        client: httpx.AsyncClient,
+    ) -> GitLabOAuthClient:
+        return GitLabOAuthClient(settings, client)
 
     @provide
     def code_runner(self, client: httpx.AsyncClient, settings: Settings) -> CodeRunner:

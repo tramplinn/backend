@@ -11,6 +11,7 @@ from tests.conftest import TEST_SECRET
 from tramplin.core.config import Environment, Settings, _parse_duration, load_settings
 from tramplin.core.errors import OAuthProviderError, StorageError
 from tramplin.infrastructure.github import GitHubOAuthClient, _parse_profile, replace_email
+from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.oauth_http import as_object, body
 from tramplin.infrastructure.oauth_http import text as text_or_none
 from tramplin.infrastructure.oauth_state import OAuthStateStore
@@ -145,6 +146,57 @@ async def test_yandex_rejects_profile_without_id_and_missing_token() -> None:
 
     http.get.return_value = response(200, {"login": "s"})
     with pytest.raises(OAuthProviderError, match="id или login"):
+        await client.fetch_profile("token")
+
+    http.post.return_value = response(200, {"error": "invalid_grant"})
+    with pytest.raises(OAuthProviderError, match="access-токен"):
+        await client.exchange_code("bad")
+
+
+def gitlab_settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        jwt_secret=TEST_SECRET,
+        github_client_id="cid",
+        github_client_secret=SecretStr("csecret"),
+        gitlab_client_id="lcid",
+        gitlab_client_secret=SecretStr("lsecret"),
+    )
+
+
+async def test_gitlab_client_reads_profile_and_exchanges_code() -> None:
+    http = cast(Any, type("HttpFake", (), {"post": AsyncMock(), "get": AsyncMock()})())
+    client = GitLabOAuthClient(gitlab_settings(), http)
+    assert "state=state" in client.authorize_url("state")
+    assert "response_type=code" in client.authorize_url("state")
+
+    http.post.return_value = response(200, {"access_token": "token"})
+    assert await client.exchange_code("code") == "token"
+
+    http.get.return_value = response(
+        200,
+        {
+            "id": 42,
+            "username": "student",
+            "name": "Студент",
+            "email": "student@example.test",
+            "avatar_url": "https://example.test/a.png",
+        },
+    )
+    profile = await client.fetch_profile("token")
+
+    assert profile.provider_id == "42"
+    assert profile.login == "student"
+    assert profile.email == "student@example.test"
+    assert profile.avatar_url == "https://example.test/a.png"
+
+
+async def test_gitlab_rejects_profile_without_id_and_missing_token() -> None:
+    http = cast(Any, type("HttpFake", (), {"post": AsyncMock(), "get": AsyncMock()})())
+    client = GitLabOAuthClient(gitlab_settings(), http)
+
+    http.get.return_value = response(200, {"username": "s"})
+    with pytest.raises(OAuthProviderError, match="id или username"):
         await client.fetch_profile("token")
 
     http.post.return_value = response(200, {"error": "invalid_grant"})

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
 from tramplin.infrastructure.github import GitHubOAuthClient
+from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.repositories import (
@@ -150,6 +151,7 @@ class RequestProvider(Provider):
         identities: UserIdentityRepository,
         github: GitHubOAuthClient,
         yandex: YandexOAuthClient,
+        gitlab: GitLabOAuthClient,
         state_store: OAuthStateStore,
         sessions: SessionService,
         settings: Settings,
@@ -168,6 +170,8 @@ class RequestProvider(Provider):
         services = [build(IdentityProvider.GITHUB, github)]
         if settings.yandex_enabled:
             services.append(build(IdentityProvider.YANDEX, yandex))
+        if settings.gitlab_enabled:
+            services.append(build(IdentityProvider.GITLAB, gitlab))
         return OAuthRegistry(services)
 
     @provide

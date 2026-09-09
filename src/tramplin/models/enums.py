@@ -17,6 +17,7 @@ class IdentityProvider(StrEnum):
 
     GITHUB = "github"
     YANDEX = "yandex"
+    GITLAB = "gitlab"
 
 
 class QuestionType(StrEnum):

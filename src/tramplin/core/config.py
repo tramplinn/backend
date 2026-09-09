@@ -52,6 +52,9 @@ class Settings(DatabaseSettings):
     yandex_client_id: str = ""
     yandex_client_secret: SecretStr = SecretStr("")
     yandex_redirect_uri: str = f"http://localhost:8000{API_PREFIX}/auth/yandex/callback"
+    gitlab_client_id: str = ""
+    gitlab_client_secret: SecretStr = SecretStr("")
+    gitlab_redirect_uri: str = f"http://localhost:8000{API_PREFIX}/auth/gitlab/callback"
     oauth_state_ttl: Duration = timedelta(minutes=10)
     oauth_state_bytes: int = 32
     http_timeout: Duration = timedelta(seconds=10)
@@ -113,6 +116,10 @@ class Settings(DatabaseSettings):
     @property
     def yandex_enabled(self) -> bool:
         return bool(self.yandex_client_id and self.yandex_client_secret.get_secret_value())
+
+    @property
+    def gitlab_enabled(self) -> bool:
+        return bool(self.gitlab_client_id and self.gitlab_client_secret.get_secret_value())
 
     @property
     def llm_fallbacks(self) -> list[str]:
