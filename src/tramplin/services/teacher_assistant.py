@@ -10,6 +10,7 @@ from tramplin.infrastructure.llm import ChatPrompt, ChatTurn, LlmClient
 
 AuthoringSurface = Literal["lesson", "algorithm_problem"]
 Difficulty = Literal["easy", "medium", "hard"]
+Language = Literal["python", "javascript", "typescript", "cpp", "java", "csharp", "go", "kotlin"]
 
 SYSTEM_PROMPT: Final = """\
 Ты — помощник преподавателя образовательной платформы «Трамплин».
@@ -21,10 +22,31 @@ SYSTEM_PROMPT: Final = """\
 - Меняй только нужные поля: остальные верни как null.
 - Для lesson доступны title и body_md.
 - Для algorithm_problem доступны title, statement_md, difficulty, tags, time_limit_ms,
-  memory_limit_kb. Условие должно однозначно описывать ввод, вывод, ограничения и пример.
+  memory_limit_kb, test_cases, templates. Условие должно однозначно описывать ввод, вывод,
+  ограничения и пример.
+- test_cases, если задан, — это новый полный список тестов, целиком заменяющий текущий:
+  включи хотя бы один открытый пример (is_sample=true) и хотя бы один скрытый тест, и следи,
+  чтобы каждый реально соответствовал условию и его ограничениям.
+- templates, если заданы, обновляют или добавляют шаблон только для перечисленных языков —
+  языки, которых нет в списке, не трогаются. solution_code — рабочее эталонное решение,
+  которое реально проходит test_cases, а не заглушка.
 - Не публикуй, не удаляй и не утверждай, что правки уже применены.
 - explanation — короткое объяснение результата для преподавателя.
 """
+
+
+@dataclass(frozen=True, slots=True)
+class TestCaseItem:
+    input: str
+    expected_output: str
+    is_sample: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TemplateItem:
+    language: str
+    starter_code: str
+    solution_code: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +58,24 @@ class AuthoringDocument:
     tags: list[str] | None = None
     time_limit_ms: int | None = None
     memory_limit_kb: int | None = None
+    test_cases: list[TestCaseItem] | None = None
+    templates: list[TemplateItem] | None = None
+
+
+class TestCaseSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input: str = Field(max_length=20000)
+    expected_output: str = Field(max_length=20000)
+    is_sample: bool
+
+
+class TemplateSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: Language
+    starter_code: str = Field(max_length=20000)
+    solution_code: str = Field(max_length=20000)
 
 
 class AuthoringPatch(BaseModel):
@@ -49,6 +89,8 @@ class AuthoringPatch(BaseModel):
     tags: list[str] | None = Field(default=None, max_length=20)
     time_limit_ms: int | None = Field(default=None, ge=50, le=5000)
     memory_limit_kb: int | None = Field(default=None, ge=16384, le=524288)
+    test_cases: list[TestCaseSuggestion] | None = Field(default=None, max_length=50)
+    templates: list[TemplateSuggestion] | None = Field(default=None, max_length=8)
 
 
 class TeacherAssistantService:
@@ -105,6 +147,8 @@ class TeacherAssistantService:
                 patch.tags,
                 patch.time_limit_ms,
                 patch.memory_limit_kb,
+                patch.test_cases,
+                patch.templates,
             )
         )
         if surface == "lesson" and algorithm_only:
