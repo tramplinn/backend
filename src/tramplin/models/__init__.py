@@ -23,6 +23,7 @@ from tramplin.models.content import (
 from tramplin.models.enums import (
     AssetMime,
     ContentStatus,
+    EmailQueue,
     FeedbackStatus,
     IdentityProvider,
     QuestionType,
@@ -31,6 +32,7 @@ from tramplin.models.enums import (
 from tramplin.models.feedback import Feedback, FeedbackAttachment
 from tramplin.models.mcp_oauth import McpOAuthAuthorization, McpOAuthToken
 from tramplin.models.news import News, NewsPhoto
+from tramplin.models.notifications import EmailJobOutbox
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.recommendations import EmbeddingJobOutbox
@@ -48,6 +50,8 @@ __all__ = [
     "Base",
     "ContentStatus",
     "Course",
+    "EmailJobOutbox",
+    "EmailQueue",
     "EmbeddingJobOutbox",
     "Feedback",
     "FeedbackAttachment",

@@ -133,6 +133,28 @@ services:
     profiles: ["full"]
     networks: [default, edge]
 
+  email-worker:
+    build: .
+    image: tramplin-api:local
+    command: ["python", "-m", "tramplin.email_worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD:-tramplin}@postgres:5432/${POSTGRES_DB:-tramplin}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-tramplin}:${RABBITMQ_PASSWORD:-tramplin}@tramplin-rabbitmq:5672/
+      EMAIL_TRANSACTIONAL_QUEUE_NAME: tramplin-local-email-transactional
+      EMAIL_BULK_QUEUE_NAME: tramplin-local-email-bulk
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "tramplin.email_worker", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    profiles: ["full"]
+    networks: [default, edge]
+
 networks:
   edge:
     external: true

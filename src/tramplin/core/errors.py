@@ -68,6 +68,11 @@ class OAuthStateError(AuthError):
     message = "OAuth state недействителен или истёк"
 
 
+class InvalidEmailCodeError(AuthError):
+    code = "invalid_email_code"
+    message = "Код неверный, истёк или не запрашивался"
+
+
 class OAuthProviderError(AppError):
     status_code = 502
     code = "oauth_provider_error"

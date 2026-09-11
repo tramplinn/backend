@@ -9,6 +9,7 @@ from tramplin.infrastructure.repositories.lessons import LessonRepository
 from tramplin.infrastructure.repositories.mcp_oauth import McpOAuthRepository
 from tramplin.infrastructure.repositories.modules import ModuleRepository
 from tramplin.infrastructure.repositories.news import NewsRepository
+from tramplin.infrastructure.repositories.notifications import EmailJobRepository
 from tramplin.infrastructure.repositories.quiz_attempts import QuizAttemptRepository
 from tramplin.infrastructure.repositories.quizzes import QuizRepository
 from tramplin.infrastructure.repositories.recommendations import RecommendationRepository
@@ -21,6 +22,7 @@ __all__ = [
     "AlgorithmRepository",
     "AssetRepository",
     "CourseRepository",
+    "EmailJobRepository",
     "FeedbackRepository",
     "LessonProgressRepository",
     "LessonRepository",

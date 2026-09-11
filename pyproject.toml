@@ -25,6 +25,9 @@ dependencies = [
     "faststream[rabbit]>=0.7.5",
     "pgvector>=0.4.1",
     "python-multipart>=0.0.32",
+    "jinja2>=3.1.6",
+    "premailer>=3.10.0",
+    "email-validator>=2.3.0",
 ]
 
 [dependency-groups]
@@ -72,6 +75,10 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["uuid_utils.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["premailer.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

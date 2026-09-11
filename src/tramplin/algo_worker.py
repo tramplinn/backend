@@ -33,10 +33,13 @@ class AlgorithmWorkerApplication:
         self.settings = settings
         self.engine, self.session_factory = build_engine_and_sessionmaker(settings)
         self.broker = RabbitBroker(settings.rabbitmq_url)
+        # declare=False: топология — в infra/rabbitmq/definitions.json, не здесь.
+        # Отсутствующая очередь — явная ошибка на старте, а не молчаливое создание.
         self.job_queue = RabbitQueue(
             settings.algorithm_queue_name,
             queue_type=QueueType.QUORUM,
             durable=True,
+            declare=False,
         )
         self.submission_queue = FastStreamSubmissionQueue(self.broker, self.job_queue)
         self.runner_client = httpx.AsyncClient(timeout=settings.http_timeout.total_seconds())

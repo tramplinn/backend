@@ -177,6 +177,40 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  email-worker:
+    build: .
+    image: ${API_IMAGE:-tramplin-api:local}
+    restart: unless-stopped
+    command: ["python", "-m", "tramplin.email_worker"]
+    env_file: .env.runtime
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tramplin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tramplin}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-tramplin}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@tramplin-rabbitmq:5672/
+      EMAIL_TRANSACTIONAL_QUEUE_NAME: ${COMPOSE_PROJECT_NAME:-tramplin-staging}-email-transactional
+      EMAIL_BULK_QUEUE_NAME: ${COMPOSE_PROJECT_NAME:-tramplin-staging}-email-bulk
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-m", "tramplin.email_worker", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [default, edge]
+    stop_grace_period: 30s
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   edge:
     external: true

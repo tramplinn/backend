@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import EmailStr, Field
 
 from tramplin.api.schemas.base import ApiModel
 from tramplin.models.enums import IdentityProvider
@@ -8,6 +8,15 @@ from tramplin.models.enums import IdentityProvider
 
 class AuthorizeUrlOut(ApiModel):
     authorize_url: str
+
+
+class EmailStartIn(ApiModel):
+    email: EmailStr
+
+
+class EmailVerifyIn(ApiModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class ProvidersOut(ApiModel):

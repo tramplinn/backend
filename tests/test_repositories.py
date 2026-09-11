@@ -6,6 +6,7 @@ from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
     CourseRepository,
+    EmailJobRepository,
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
@@ -47,6 +48,7 @@ from tramplin.models.enums import (
     AlgorithmVerdict,
     AssetMime,
     ContentStatus,
+    EmailQueue,
     IdentityProvider,
     PracticeMode,
     PracticeSessionStatus,
@@ -57,6 +59,7 @@ from tramplin.models.enums import (
     UserRole,
 )
 from tramplin.models.news import News
+from tramplin.models.notifications import EmailJobOutbox
 from tramplin.models.progress import LessonProgress, QuizAttempt
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.recommendations import EmbeddingJobOutbox
@@ -492,3 +495,22 @@ async def test_recommendation_repository_queries_and_mutations() -> None:
         RecommendationEntityType.ALGORITHM_PROBLEM, problem.id, [0.1, 0.2]
     )
     assert session.execute.await_count == 2
+
+
+async def test_email_job_repository_claims_the_oldest_undispatched_job() -> None:
+    job = EmailJobOutbox(
+        to_email="student@example.com",
+        subject="Код для входа: 482913",
+        html_body="<p>482913</p>",
+        text_body="482913",
+        category="auth_otp",
+        queue=EmailQueue.TRANSACTIONAL,
+        dispatched_at=None,
+        attempts=0,
+        last_error=None,
+    )
+    session = session_with(job)
+    repository = EmailJobRepository(session)
+
+    assert repository.add(job) is job
+    assert await repository.claim_outbox() is job

@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import (
 
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
+from tramplin.infrastructure.email_code_store import EmailCodeStore
+from tramplin.infrastructure.email_renderer import EmailRenderer
 from tramplin.infrastructure.github import GitHubOAuthClient
 from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.judge0 import Judge0CodeRunner
@@ -67,6 +69,15 @@ class AppProvider(Provider):
     @provide
     def tutor_quota(self, redis: Redis, settings: Settings) -> TutorQuota:
         return TutorQuota(redis, settings)
+
+    @provide
+    def email_code_store(self, redis: Redis, settings: Settings) -> EmailCodeStore:
+        return EmailCodeStore(redis, settings)
+
+    # Jinja2 Environment компилирует и кеширует шаблоны — не пересоздаём на каждый запрос.
+    @provide
+    def email_renderer(self) -> EmailRenderer:
+        return EmailRenderer()
 
     # APP-скоуп обязателен: поток ответа модели живёт дольше HTTP-запроса.
     @provide

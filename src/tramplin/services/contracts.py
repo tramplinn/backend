@@ -3,7 +3,7 @@ from typing import Literal, Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.models.enums import IdentityProvider, RecommendationEntityType
+from tramplin.models.enums import EmailQueue, IdentityProvider, RecommendationEntityType
 
 StatePurpose = Literal["login", "link"]
 
@@ -106,3 +106,27 @@ class EmbeddingQueue(Protocol):
     async def publish(
         self, entity_type: RecommendationEntityType, entity_id: uuid.UUID
     ) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class EmailJobPayload:
+    """Письмо целиком: email-service — независимый репозиторий без своих шаблонов."""
+
+    message_id: uuid.UUID
+    queue: EmailQueue
+    to_email: str
+    subject: str
+    html_body: str
+    text_body: str
+    category: str
+
+
+class EmailQueuePort(Protocol):
+    async def publish(self, payload: EmailJobPayload) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedEmail:
+    subject: str
+    html: str
+    text: str

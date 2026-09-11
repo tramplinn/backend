@@ -109,6 +109,13 @@ class Settings(DatabaseSettings):
     embedding_dimensions: int = 512
     embedding_queue_name: str = "embedding-jobs"
 
+    email_transactional_queue_name: str = "email-transactional"
+    email_bulk_queue_name: str = "email-bulk"
+    email_from_address: str = "noreply@tramplin.example"
+    email_code_ttl: Duration = timedelta(minutes=10)
+    email_code_cooldown: Duration = timedelta(seconds=60)
+    email_code_max_attempts: int = 5
+
     @property
     def embeddings_enabled(self) -> bool:
         return bool(self.embedding_model and self.llm_api_key.get_secret_value())

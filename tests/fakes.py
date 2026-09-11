@@ -1,8 +1,19 @@
+from typing import Any
+
 import uuid_utils.compat as uuid
 
+from tramplin.core.errors import InvalidEmailCodeError, TooManyRequestsError
 from tramplin.models.enums import IdentityProvider, UserRole
+from tramplin.models.notifications import EmailJobOutbox
 from tramplin.models.users import RefreshToken, User, UserIdentity
-from tramplin.services.contracts import CourseActivity, OAuthProfile, OAuthState, ProfileStats
+from tramplin.services.contracts import (
+    CourseActivity,
+    OAuthProfile,
+    OAuthState,
+    ProfileStats,
+    RenderedEmail,
+    StatePurpose,
+)
 
 type CourseActivities = list[CourseActivity]
 
@@ -147,6 +158,56 @@ class FakeGitHubClient:
 
     async def fetch_profile(self, access_token: str) -> OAuthProfile:
         return self.profile
+
+
+class FakeEmailJobRepository:
+    def __init__(self) -> None:
+        self.jobs: list[EmailJobOutbox] = []
+
+    def add(self, job: EmailJobOutbox) -> EmailJobOutbox:
+        self.jobs.append(job)
+        return job
+
+    async def claim_outbox(self) -> EmailJobOutbox | None:
+        return next((job for job in self.jobs if job.dispatched_at is None), None)
+
+
+class FakeEmailCodeStore:
+    """Код фиксирован ("000000"): тесты не гоняют secrets.randbelow, только контракт."""
+
+    CODE = "000000"
+
+    def __init__(self) -> None:
+        self.issued: dict[str, str] = {}
+        self.on_cooldown: set[str] = set()
+
+    async def issue(self, email: str, purpose: StatePurpose, *, scope: str | None = None) -> str:
+        key = f"{purpose}:{email}:{scope}"
+        if key in self.on_cooldown:
+            raise TooManyRequestsError("cooldown")
+        self.issued[key] = self.CODE
+        self.on_cooldown.add(key)
+        return self.CODE
+
+    async def verify(
+        self, email: str, purpose: StatePurpose, code: str, *, scope: str | None = None
+    ) -> None:
+        key = f"{purpose}:{email}:{scope}"
+        if self.issued.get(key) != code:
+            raise InvalidEmailCodeError
+        del self.issued[key]
+        # Реальный cooldown в Redis живёт своим TTL и не снимается по verify — здесь
+        # снимаем сразу, иначе тестам на повторный вход пришлось бы имитировать время.
+        self.on_cooldown.discard(key)
+
+
+class FakeEmailRenderer:
+    def render(self, name: str, context: dict[str, Any]) -> RenderedEmail:
+        return RenderedEmail(
+            subject=f"subject:{name}:{context.get('code')}",
+            html=f"<p>{context.get('code')}</p>",
+            text=str(context.get("code")),
+        )
 
 
 class FakeStateStore:

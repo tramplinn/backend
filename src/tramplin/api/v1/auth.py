@@ -6,10 +6,18 @@ from fastapi.responses import RedirectResponse
 
 from tramplin.api.cookies import REFRESH_COOKIE_NAME, clear_refresh_cookie, set_refresh_cookie
 from tramplin.api.dependencies import CurrentUser
-from tramplin.api.schemas import AccessTokenOut, AuthorizeUrlOut, MeOut, ProvidersOut
+from tramplin.api.schemas import (
+    AccessTokenOut,
+    AuthorizeUrlOut,
+    EmailStartIn,
+    EmailVerifyIn,
+    MeOut,
+    ProvidersOut,
+)
 from tramplin.api.schemas.users import UserProfileUpdate
 from tramplin.core.config import Settings
 from tramplin.models.enums import IdentityProvider
+from tramplin.services.email_auth import EmailAuthService
 from tramplin.services.oauth_auth import OAuthRegistry
 from tramplin.services.session import SessionService
 from tramplin.services.users import UserService
@@ -132,6 +140,65 @@ async def logout_everywhere(
 ) -> None:
     await sessions.logout_everywhere(user.id)
     clear_refresh_cookie(response, settings)
+
+
+@router.post(
+    "/email/start",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Отправить код для входа по почте",
+    description="Письмо с кодом уходит в очередь; повторная отправка ограничена cooldown'ом.",
+)
+async def email_start(
+    payload: EmailStartIn,
+    email_auth: FromDishka[EmailAuthService],
+) -> None:
+    await email_auth.request_login_code(payload.email)
+
+
+@router.post(
+    "/email/verify",
+    summary="Подтвердить код и войти",
+    description="Существующий email — вход, новый — регистрация нового пользователя.",
+)
+async def email_verify(
+    payload: EmailVerifyIn,
+    response: Response,
+    email_auth: FromDishka[EmailAuthService],
+    settings: FromDishka[Settings],
+) -> AccessTokenOut:
+    result = await email_auth.verify_login_code(payload.email, payload.code)
+    set_refresh_cookie(response, settings, result.tokens.refresh_token)
+    return AccessTokenOut(
+        access_token=result.tokens.access_token, expires_at=result.tokens.access_expires_at
+    )
+
+
+@router.post(
+    "/email/link/start",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Отправить код для привязки почты",
+    description="Код привязан к текущему пользователю: подтвердить его может только он.",
+)
+async def email_link_start(
+    payload: EmailStartIn,
+    user: CurrentUser,
+    email_auth: FromDishka[EmailAuthService],
+) -> None:
+    await email_auth.request_link_code(user.id, payload.email)
+
+
+@router.post(
+    "/email/link/verify",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Подтвердить код и привязать почту",
+    description="Почта — постоянный способ входа, не зависящий от внешних провайдеров.",
+)
+async def email_link_verify(
+    payload: EmailVerifyIn,
+    user: CurrentUser,
+    email_auth: FromDishka[EmailAuthService],
+) -> None:
+    await email_auth.verify_link_code(user.id, payload.email, payload.code)
 
 
 @router.get(

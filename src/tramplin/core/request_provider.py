@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tramplin.core.config import Settings
 from tramplin.core.security import AccessTokenCodec
+from tramplin.infrastructure.email_code_store import EmailCodeStore
+from tramplin.infrastructure.email_renderer import EmailRenderer
 from tramplin.infrastructure.github import GitHubOAuthClient
 from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.llm import LlmClient
@@ -13,6 +15,7 @@ from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
     CourseRepository,
+    EmailJobRepository,
     FeedbackRepository,
     LessonProgressRepository,
     LessonRepository,
@@ -43,6 +46,7 @@ from tramplin.services.assets import AssetService
 from tramplin.services.contracts import CodeRunner
 from tramplin.services.course_plans import CoursePlanService
 from tramplin.services.courses import CourseService
+from tramplin.services.email_auth import EmailAuthService
 from tramplin.services.feedback import FeedbackService
 from tramplin.services.lessons import LessonService
 from tramplin.services.mcp_oauth import McpOAuthService
@@ -91,6 +95,7 @@ class RequestProvider(Provider):
     recommendations = provide(RecommendationRepository)
     mcp_oauth = provide(McpOAuthRepository)
     tags = provide(TagRepository)
+    email_jobs = provide(EmailJobRepository)
 
     @provide
     def session_service(
@@ -102,6 +107,22 @@ class RequestProvider(Provider):
         settings: Settings,
     ) -> SessionService:
         return SessionService(session, users, refresh_tokens, codec, settings)
+
+    @provide
+    def email_auth_service(
+        self,
+        session: AsyncSession,
+        users: UserRepository,
+        identities: UserIdentityRepository,
+        email_jobs: EmailJobRepository,
+        codes: EmailCodeStore,
+        renderer: EmailRenderer,
+        sessions: SessionService,
+        settings: Settings,
+    ) -> EmailAuthService:
+        return EmailAuthService(
+            session, users, identities, email_jobs, codes, renderer, sessions, settings
+        )
 
     @provide
     def course_plan_service(

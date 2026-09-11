@@ -1,27 +1,17 @@
-import logging
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.core.errors import (
-    ConflictError,
-    IdentityAlreadyLinkedError,
-    NotFoundError,
-    OAuthStateError,
-)
-from tramplin.models.enums import IdentityProvider, UserRole
-from tramplin.models.users import User, UserIdentity
+from tramplin.core.errors import NotFoundError, OAuthStateError
+from tramplin.models.enums import IdentityProvider
+from tramplin.models.users import User
 from tramplin.services.contracts import OAuthProfile, OAuthState, Transaction
 from tramplin.services.entity_updates import require
+from tramplin.services.identity_linking import IdentityLinker
 from tramplin.services.session import SessionService, TokenPair
-from tramplin.services.users import (
-    UserIdentityRepositoryPort,
-    UserRepositoryPort,
-    ensure_active,
-)
+from tramplin.services.users import UserIdentityRepositoryPort, UserRepositoryPort
 
 
 class OAuthClientPort(Protocol):
@@ -36,14 +26,6 @@ class OAuthStateStorePort(Protocol):
     async def issue(self, state: OAuthState) -> str: ...
 
     async def consume(self, token: str) -> OAuthState | None: ...
-
-
-logger = logging.getLogger(__name__)
-
-LOGIN_FORBIDDEN: Final = re.compile(r"[^a-z0-9_-]+")
-FALLBACK_LOGIN: Final = "student"
-MAX_LOGIN_LENGTH: Final = 48
-MAX_LOGIN_SUFFIX: Final = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,12 +49,11 @@ class OAuthAuthService:
         sessions: SessionService,
     ) -> None:
         self._session = session
-        self._users = users
-        self._identities = identities
         self._provider = provider
         self._client = client
         self._state_store = state_store
         self._sessions = sessions
+        self._linker = IdentityLinker(users, identities)
 
     @property
     def provider(self) -> IdentityProvider:
@@ -102,88 +83,18 @@ class OAuthAuthService:
             raise OAuthStateError
 
         profile = await self._client.fetch_profile(await self._client.exchange_code(code))
-        user = (
-            await self._link_identity(state, profile)
-            if state.purpose == "link"
-            else await self._login_or_register(profile)
-        )
+        if state.purpose == "link":
+            if state.user_id is None:
+                raise OAuthStateError
+            user = await self._linker.link_identity(
+                self._provider, uuid.UUID(state.user_id), profile
+            )
+        else:
+            user = await self._linker.login_or_register(self._provider, profile)
 
         tokens = self._sessions.issue(user)
         await self._session.commit()
         return AuthResult(user=user, tokens=tokens, next_path=state.next_path)
-
-    async def _login_or_register(self, profile: OAuthProfile) -> User:
-        identity = await self._identities.get_by_provider(self._provider, profile.provider_id)
-        if identity is not None:
-            ensure_active(identity.user)
-            self._fill_profile(identity.user, profile)
-            return identity.user
-
-        user = User(
-            login=await self._unique_login(profile.login),
-            name=profile.name,
-            email=profile.email,
-            avatar_url=profile.avatar_url,
-            role=UserRole.STUDENT,
-            is_active=True,
-        )
-        user.created_by = user.id
-        user.updated_by = user.id
-        self._users.add(user)
-        self._add_identity(user, profile)
-        logger.info("registered user via %s: %s", self._provider.value, user.id)
-        return user
-
-    async def _link_identity(self, state: OAuthState, profile: OAuthProfile) -> User:
-        if state.user_id is None:
-            raise OAuthStateError
-        user = require(
-            await self._users.get(uuid.UUID(state.user_id)), NotFoundError("Пользователь не найден")
-        )
-        ensure_active(user)
-
-        existing = await self._identities.get_by_provider(self._provider, profile.provider_id)
-        if existing is not None:
-            if existing.user_id != user.id:
-                raise IdentityAlreadyLinkedError
-            return user
-        if await self._identities.get_for_user(user.id, self._provider) is not None:
-            raise ConflictError(f"У пользователя уже привязан аккаунт {self._provider.value}")
-
-        self._add_identity(user, profile)
-        self._fill_profile(user, profile)
-        return user
-
-    def _add_identity(self, user: User, profile: OAuthProfile) -> None:
-        self._identities.add(
-            UserIdentity(
-                user_id=user.id,
-                provider=self._provider,
-                provider_id=profile.provider_id,
-                email=profile.email,
-                created_by=user.id,
-                updated_by=user.id,
-            ),
-        )
-
-    async def _unique_login(self, raw_login: str) -> str:
-        cleaned = LOGIN_FORBIDDEN.sub("-", raw_login.strip().lower()).strip("-")
-        base = cleaned[:MAX_LOGIN_LENGTH] or FALLBACK_LOGIN
-        if not await self._users.login_exists(base):
-            return base
-        for suffix in range(2, MAX_LOGIN_SUFFIX):
-            candidate = f"{base}-{suffix}"
-            if not await self._users.login_exists(candidate):
-                return candidate
-        raise ConflictError("Не удалось подобрать свободный логин")
-
-    @staticmethod
-    def _fill_profile(user: User, profile: OAuthProfile) -> None:
-        """Заполняем только пустые поля: правки в админке не затираются логином."""
-        user.name = user.name or profile.name
-        user.email = user.email or profile.email
-        user.avatar_url = profile.avatar_url or user.avatar_url
-        user.updated_by = user.id
 
 
 class OAuthRegistry:

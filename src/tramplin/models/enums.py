@@ -18,6 +18,7 @@ class IdentityProvider(StrEnum):
     GITHUB = "github"
     YANDEX = "yandex"
     GITLAB = "gitlab"
+    EMAIL = "email"
 
 
 class QuestionType(StrEnum):
@@ -103,3 +104,10 @@ class AlgorithmProgressStatus(StrEnum):
 class RecommendationEntityType(StrEnum):
     COURSE = "course"
     ALGORITHM_PROBLEM = "algorithm_problem"
+
+
+class EmailQueue(StrEnum):
+    """Приоритет доставки: транзакционные письма не должны стоять за рассылками."""
+
+    TRANSACTIONAL = "transactional"
+    BULK = "bulk"
