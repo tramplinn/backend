@@ -127,6 +127,7 @@ class AlgorithmAuthoringService:
         if "tags" in changes:
             problem.tags = await self._tags.get_or_create_many(changes.pop("tags"))
         validate_required_updates(changes, {"slug", "title", "difficulty", "status"})
+        was_published = problem.status is ContentStatus.PUBLISHED
         problem.slug = changes.get("slug", problem.slug)
         problem.provider = changes.get("provider", problem.provider)
         problem.external_key = changes.get("external_key", problem.external_key)
@@ -138,7 +139,10 @@ class AlgorithmAuthoringService:
         problem.time_limit_ms = changes.get("time_limit_ms", problem.time_limit_ms)
         problem.memory_limit_kb = changes.get("memory_limit_kb", problem.memory_limit_kb)
         problem.status = changes.get("status", problem.status)
-        publishing = problem.status is ContentStatus.PUBLISHED
+        # Публикуемость проверяем только при переходе в published, а не на каждом
+        # автосохранении уже опубликованной задачи — иначе любая правка (например,
+        # заголовка) блокируется требованием провалидировать эталонное решение.
+        publishing = problem.status is ContentStatus.PUBLISHED and not was_published
         _validate_problem_source(problem, require_statement=publishing)
         if publishing:
             _ensure_publishable(problem)
