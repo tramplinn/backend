@@ -82,7 +82,10 @@ class EmailAuthService:
         normalized = _normalize(email)
         code = await self._codes.issue(normalized, purpose, scope=scope)
         ttl_minutes = int(self._settings.email_code_ttl.total_seconds() // 60)
-        rendered = self._renderer.render("otp", {"code": code, "ttl_minutes": ttl_minutes})
+        logo_url = f"{self._settings.frontend_base_url}/brandmark-email.png"
+        rendered = self._renderer.render(
+            "otp", {"code": code, "ttl_minutes": ttl_minutes, "logo_url": logo_url}
+        )
         self._jobs.add(
             EmailJobOutbox(
                 to_email=normalized,

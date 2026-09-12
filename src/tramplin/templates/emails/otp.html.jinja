@@ -2,18 +2,65 @@
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ code }}</title>
     <style>
-      body { margin: 0; background: #f4f5f7; font-family: Arial, Helvetica, sans-serif; }
-      .wrap { max-width: 480px; margin: 0 auto; padding: 32px 16px; }
-      .card { background: #ffffff; border-radius: 8px; padding: 32px; text-align: center; }
-      .code {
-        font-size: 32px;
-        font-weight: bold;
-        letter-spacing: 8px;
-        color: #111827;
-        margin: 24px 0;
+      body {
+        margin: 0;
+        background: #f4f5f7;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
       }
-      .muted { color: #6b7280; font-size: 13px; line-height: 1.5; }
+      .wrap { max-width: 480px; margin: 0 auto; padding: 40px 16px; }
+      .brand-wrap { padding-bottom: 24px; text-align: center; }
+      .brand-logo { display: block; }
+      .brand-word {
+        padding-left: 8px;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: #2b7fff;
+      }
+      .card {
+        background: #ffffff;
+        border: 1px solid #e6e8ec;
+        border-radius: 16px;
+        padding: 40px 32px;
+        text-align: center;
+      }
+      .eyebrow {
+        margin: 0 0 20px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #8a8f98;
+      }
+      .code-box {
+        display: inline-block;
+        padding: 16px 28px;
+        background: #f4f5f7;
+        border: 1px solid #e6e8ec;
+        border-radius: 12px;
+      }
+      .code-text {
+        display: inline-block;
+        margin-right: -10px;
+        font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: 10px;
+        color: #0f0f11;
+      }
+      .note {
+        margin: 24px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #8a8f98;
+      }
+      .footer {
+        margin: 24px 0 0;
+        text-align: center;
+        font-size: 12px;
+        color: #8a8f98;
+      }
     </style>
   </head>
   <body>
@@ -21,14 +68,31 @@
       <tr>
         <td>
           <div class="wrap">
+            <div class="brand-wrap">
+              <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto">
+                <tr>
+                  <td valign="middle">
+                    <img
+                      class="brand-logo"
+                      src="{{ logo_url }}"
+                      width="37"
+                      height="20"
+                      alt="Tramplin"
+                    />
+                  </td>
+                  <td valign="middle" class="brand-word">трамплин</td>
+                </tr>
+              </table>
+            </div>
             <div class="card">
-              <p>Код для входа в Tramplin:</p>
-              <div class="code">{{ code }}</div>
-              <p class="muted">
+              <p class="eyebrow">Код для входа</p>
+              <div class="code-box"><span class="code-text">{{ code }}</span></div>
+              <p class="note">
                 Код действует {{ ttl_minutes }} минут. Если вы не запрашивали вход —
                 просто проигнорируйте это письмо.
               </p>
             </div>
+            <p class="footer">трамплин · автоматическое письмо, отвечать не нужно</p>
           </div>
         </td>
       </tr>
