@@ -92,6 +92,29 @@ async def test_link_flow_attaches_identity_to_logged_in_user(env: AuthEnv) -> No
     assert env.identities.identities[0].user_id == user.id
 
 
+async def test_link_flow_fills_empty_avatar_from_provider(env: AuthEnv) -> None:
+    user = env.users.add(User(login="teacher", role=UserRole.TEACHER, is_active=True))
+
+    result = await env.github.complete_callback("code", await start_link(env.github, user.id))
+
+    assert result.user.avatar_url == "https://avatars.test/42.png"
+
+
+async def test_link_flow_does_not_overwrite_existing_avatar(env: AuthEnv) -> None:
+    user = env.users.add(
+        User(
+            login="teacher",
+            role=UserRole.TEACHER,
+            is_active=True,
+            avatar_url="https://example.com/custom.png",
+        )
+    )
+
+    result = await env.github.complete_callback("code", await start_link(env.github, user.id))
+
+    assert result.user.avatar_url == "https://example.com/custom.png"
+
+
 async def test_link_flow_for_identity_owned_by_another_user_raises_conflict(env: AuthEnv) -> None:
     await env.github.complete_callback("code", await start_login(env.github))
     other = env.users.add(User(login="other", role=UserRole.STUDENT, is_active=True))

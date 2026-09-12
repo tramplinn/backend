@@ -98,5 +98,5 @@ class IdentityLinker:
         """Заполняем только пустые поля: правки в админке не затираются логином."""
         user.name = user.name or profile.name
         user.email = user.email or profile.email
-        user.avatar_url = profile.avatar_url or user.avatar_url
+        user.avatar_url = user.avatar_url or profile.avatar_url
         user.updated_by = user.id
