@@ -12,6 +12,15 @@ from tramplin.services.contracts import CourseActivity, ProfileStats
 
 type CourseActivities = list[CourseActivity]
 
+# Company/university/resume_asset — to-one, а interests — to-many: подгружаем всё сразу,
+# иначе доступ к ним из схем ответа падает MissingGreenlet на ленивой загрузке в async-сессии.
+_PROFILE_LOAD_OPTIONS = (
+    selectinload(User.company),
+    selectinload(User.university),
+    selectinload(User.resume_asset),
+    selectinload(User.interests),
+)
+
 
 class UserRepository(Repository):
     async def list(
@@ -42,18 +51,34 @@ class UserRepository(Repository):
 
         count_stmt = select(func.count()).select_from(User).where(*filters)
         total = await self._session.scalar(count_stmt)
-        stmt = select(User).where(*filters).order_by(User.login).limit(limit).offset(offset)
+        stmt = (
+            select(User)
+            .where(*filters)
+            .order_by(User.login)
+            .limit(limit)
+            .offset(offset)
+            .options(*_PROFILE_LOAD_OPTIONS)
+        )
         return list(await self._session.scalars(stmt)), total or 0
 
     async def get(self, user_id: uuid.UUID) -> User | None:
-        return await self._session.get(User, user_id)
+        stmt = select(User).where(User.id == user_id).options(*_PROFILE_LOAD_OPTIONS)
+        return (await self._session.scalars(stmt)).one_or_none()
 
     async def get_with_identities(self, user_id: uuid.UUID) -> User | None:
-        stmt = select(User).where(User.id == user_id).options(selectinload(User.identities))
+        stmt = (
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.identities), *_PROFILE_LOAD_OPTIONS)
+        )
         return (await self._session.scalars(stmt)).one_or_none()
 
     async def get_active_by_login(self, login: str) -> User | None:
-        stmt = select(User).where(User.login == login, User.is_active.is_(True))
+        stmt = (
+            select(User)
+            .where(User.login == login, User.is_active.is_(True))
+            .options(*_PROFILE_LOAD_OPTIONS)
+        )
         return (await self._session.scalars(stmt)).one_or_none()
 
     async def public_stats(self, user_id: uuid.UUID) -> ProfileStats:

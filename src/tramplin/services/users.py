@@ -1,14 +1,23 @@
+from collections.abc import Sequence
 from typing import Any, Final, Protocol
 
 import uuid_utils.compat as uuid
 
-from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError, UserInactiveError
-from tramplin.models.enums import IdentityProvider, UserRole
+from tramplin.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidUpdateError,
+    NotFoundError,
+    UserInactiveError,
+)
+from tramplin.models.assets import Asset
+from tramplin.models.directories import Company, Interest, University
+from tramplin.models.enums import AssetMime, IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import CourseActivity, PageResult, ProfileStats, Transaction
 from tramplin.services.entity_updates import require
 
-PROFILE_FIELDS = {"name", "headline", "bio", "specialty", "grade", "experience_years"}
+SIMPLE_PROFILE_FIELDS = {"name", "headline", "bio", "specialty", "grade", "experience_years"}
 type CourseActivities = list[CourseActivity]
 
 
@@ -58,6 +67,22 @@ class UserIdentityRepositoryPort(Protocol):
     async def delete(self, identity: UserIdentity) -> None: ...
 
 
+class CompanyRepositoryPort(Protocol):
+    async def get_or_create_one(self, name: str) -> Company: ...
+
+
+class UniversityRepositoryPort(Protocol):
+    async def get_or_create_one(self, name: str) -> University: ...
+
+
+class InterestRepositoryPort(Protocol):
+    async def get_or_create_many(self, names: Sequence[str]) -> list[Interest]: ...
+
+
+class AssetRepositoryPort(Protocol):
+    async def get(self, asset_id: uuid.UUID) -> Asset | None: ...
+
+
 ROLE_RANK: Final[dict[UserRole, int]] = {
     UserRole.STUDENT: 0,
     UserRole.TEACHER: 1,
@@ -82,10 +107,18 @@ class UserService:
         session: Transaction,
         users: UserRepositoryPort,
         identities: UserIdentityRepositoryPort,
+        companies: CompanyRepositoryPort,
+        universities: UniversityRepositoryPort,
+        interests: InterestRepositoryPort,
+        assets: AssetRepositoryPort,
     ) -> None:
         self._session = session
         self._users = users
         self._identities = identities
+        self._companies = companies
+        self._universities = universities
+        self._interests = interests
+        self._assets = assets
 
     async def list(
         self,
@@ -124,11 +157,39 @@ class UserService:
     async def update_profile(self, user_id: uuid.UUID, changes: dict[str, Any]) -> User:
         user = require(await self._users.get(user_id), NotFoundError("Пользователь не найден"))
         for field, value in changes.items():
-            if field in PROFILE_FIELDS:
+            if field in SIMPLE_PROFILE_FIELDS:
                 setattr(user, field, value)
+        if "company" in changes:
+            user.company = await self._resolve_company(changes["company"])
+        if "university" in changes:
+            user.university = await self._resolve_university(changes["university"])
+        if "interests" in changes:
+            user.interests = await self._interests.get_or_create_many(changes["interests"] or [])
+        if "resume_asset_id" in changes:
+            resume_asset = await self._resolve_resume_asset(changes["resume_asset_id"])
+            user.resume_asset = resume_asset
+            user.resume_asset_id = resume_asset.id if resume_asset else None
         user.updated_by = user_id
         await self._session.commit()
         return await self.get_profile(user_id)
+
+    async def _resolve_company(self, name: str | None) -> Company | None:
+        if name is None or not name.strip():
+            return None
+        return await self._companies.get_or_create_one(name)
+
+    async def _resolve_university(self, name: str | None) -> University | None:
+        if name is None or not name.strip():
+            return None
+        return await self._universities.get_or_create_one(name)
+
+    async def _resolve_resume_asset(self, asset_id: uuid.UUID | None) -> Asset | None:
+        if asset_id is None:
+            return None
+        asset = require(await self._assets.get(asset_id), NotFoundError("Файл не найден"))
+        if asset.mime is not AssetMime.PDF:
+            raise InvalidUpdateError("Резюме должно быть в формате PDF")
+        return asset
 
     async def unlink_identity(self, user_id: uuid.UUID, provider: IdentityProvider) -> None:
         identities = await self._identities.list_for_user(user_id)

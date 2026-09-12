@@ -1,8 +1,11 @@
+from collections.abc import Sequence
 from typing import Any
 
 import uuid_utils.compat as uuid
 
 from tramplin.core.errors import InvalidEmailCodeError, TooManyRequestsError
+from tramplin.models.assets import Asset
+from tramplin.models.directories import Company, Interest, University
 from tramplin.models.enums import IdentityProvider, UserRole
 from tramplin.models.notifications import EmailJobOutbox
 from tramplin.models.users import RefreshToken, User, UserIdentity
@@ -85,6 +88,61 @@ class FakeUserRepository:
     def add(self, user: User) -> User:
         self.users[user.id] = user
         return user
+
+
+class FakeCompanyRepository:
+    def __init__(self) -> None:
+        self.companies: dict[str, Company] = {}
+
+    async def get_or_create_one(self, name: str) -> Company:
+        clean = name.strip()
+        key = clean.lower()
+        if key not in self.companies:
+            self.companies[key] = Company(name=clean)
+        return self.companies[key]
+
+
+class FakeUniversityRepository:
+    def __init__(self) -> None:
+        self.universities: dict[str, University] = {}
+
+    async def get_or_create_one(self, name: str) -> University:
+        clean = name.strip()
+        key = clean.lower()
+        if key not in self.universities:
+            self.universities[key] = University(name=clean)
+        return self.universities[key]
+
+
+class FakeInterestRepository:
+    def __init__(self) -> None:
+        self.interests: dict[str, Interest] = {}
+
+    async def get_or_create_many(self, names: Sequence[str]) -> list[Interest]:
+        resolved: list[Interest] = []
+        seen: set[str] = set()
+        for raw in names:
+            name = raw.strip()
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+            key = name.lower()
+            if key not in self.interests:
+                self.interests[key] = Interest(name=name)
+            resolved.append(self.interests[key])
+        return resolved
+
+
+class FakeAssetRepository:
+    def __init__(self) -> None:
+        self.assets: dict[uuid.UUID, Asset] = {}
+
+    async def get(self, asset_id: uuid.UUID) -> Asset | None:
+        return self.assets.get(asset_id)
+
+    def add(self, asset: Asset) -> Asset:
+        self.assets[asset.id] = asset
+        return asset
 
 
 class FakeIdentityRepository:

@@ -4,6 +4,7 @@ import uuid_utils.compat as uuid
 from pydantic import Field
 
 from tramplin.api.schemas.base import ApiModel
+from tramplin.api.schemas.directories import CompanyOut, InterestOut, UniversityOut
 from tramplin.api.schemas.identities import IdentityOut
 from tramplin.models.enums import UserRole
 
@@ -25,6 +26,10 @@ class UserProfileUpdate(ApiModel):
     specialty: Specialty | None = None
     grade: DeveloperGrade | None = None
     experience_years: int | None = Field(default=None, ge=0, le=80)
+    company: str | None = Field(default=None, max_length=200)
+    university: str | None = Field(default=None, max_length=200)
+    interests: list[str] | None = Field(default=None, max_length=20)
+    resume_asset_id: uuid.UUID | None = None
 
 
 class UserOut(ApiModel):
@@ -41,6 +46,11 @@ class UserOut(ApiModel):
     specialty: Specialty | None
     grade: DeveloperGrade | None
     experience_years: int | None
+    company: CompanyOut | None
+    university: UniversityOut | None
+    interests: list[InterestOut]
+    resume_asset_id: uuid.UUID | None
+    resume_url: str | None = None
 
 
 class PublicUserOut(ApiModel):
@@ -52,6 +62,9 @@ class PublicUserOut(ApiModel):
     specialty: Specialty | None
     grade: DeveloperGrade | None
     experience_years: int | None
+    company: CompanyOut | None
+    university: UniversityOut | None
+    interests: list[InterestOut]
 
 
 class CourseActivityOut(ApiModel):
@@ -68,6 +81,7 @@ class PublicProfileOut(PublicUserOut):
     passed_quizzes: int
     solved_algorithms: int
     active_courses: list[CourseActivityOut] = Field(default_factory=list)
+    resume_url: str | None = None
 
 
 class MeOut(UserOut):

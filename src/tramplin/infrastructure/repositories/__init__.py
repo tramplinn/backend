@@ -2,6 +2,11 @@ from tramplin.infrastructure.repositories.algorithms import AlgorithmRepository
 from tramplin.infrastructure.repositories.assets import AssetRepository
 from tramplin.infrastructure.repositories.base import Repository
 from tramplin.infrastructure.repositories.courses import CourseRepository
+from tramplin.infrastructure.repositories.directories import (
+    CompanyRepository,
+    InterestRepository,
+    UniversityRepository,
+)
 from tramplin.infrastructure.repositories.feedback import FeedbackRepository
 from tramplin.infrastructure.repositories.identities import UserIdentityRepository
 from tramplin.infrastructure.repositories.lesson_progress import LessonProgressRepository
@@ -21,9 +26,11 @@ from tramplin.infrastructure.repositories.users import UserRepository
 __all__ = [
     "AlgorithmRepository",
     "AssetRepository",
+    "CompanyRepository",
     "CourseRepository",
     "EmailJobRepository",
     "FeedbackRepository",
+    "InterestRepository",
     "LessonProgressRepository",
     "LessonRepository",
     "McpOAuthRepository",
@@ -36,6 +43,7 @@ __all__ = [
     "Repository",
     "TagRepository",
     "TrackRepository",
+    "UniversityRepository",
     "UserIdentityRepository",
     "UserRepository",
 ]

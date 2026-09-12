@@ -5,8 +5,10 @@ from tramplin.core.time import utc_now
 from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
+    CompanyRepository,
     CourseRepository,
     EmailJobRepository,
+    InterestRepository,
     LessonProgressRepository,
     LessonRepository,
     ModuleRepository,
@@ -16,6 +18,7 @@ from tramplin.infrastructure.repositories import (
     RecommendationRepository,
     RefreshTokenRepository,
     TrackRepository,
+    UniversityRepository,
     UserIdentityRepository,
     UserRepository,
 )
@@ -41,6 +44,7 @@ from tramplin.models.content import (
     Track,
     TrackCourse,
 )
+from tramplin.models.directories import Company, Interest, University
 from tramplin.models.enums import (
     AlgorithmDifficulty,
     AlgorithmProgressStatus,
@@ -434,8 +438,42 @@ async def test_track_and_user_repositories() -> None:
     ) == ([user], 1)
     assert await users.get(user.id) is user
     assert await users.get_with_identities(user.id) is user
+    assert await users.get_active_by_login("user") is user
     assert await users.login_exists("user")
     assert users.add(user) is user
+
+
+async def test_directory_repositories_list_and_get_or_create() -> None:
+    company = Company(name="Yandex")
+    companies = CompanyRepository(session_with(company))
+    assert await companies.list_all() == [company]
+    assert await companies.get_or_create_one("Yandex") is company
+
+    empty_companies = CompanyRepository(session_with())
+    created_company = await empty_companies.get_or_create_one("New Co")
+    assert created_company.name == "New Co"
+
+    university = University(name="МГУ")
+    universities = UniversityRepository(session_with(university))
+    assert await universities.list_all() == [university]
+    assert await universities.get_or_create_one("МГУ") is university
+
+    empty_universities = UniversityRepository(session_with())
+    created_university = await empty_universities.get_or_create_one("New Uni")
+    assert created_university.name == "New Uni"
+
+    interest = Interest(name="Go")
+    interest_session = session_with(interest)
+    interests = InterestRepository(interest_session)
+    assert await interests.list_all() == [interest]
+
+    interest_session.scalars = AsyncMock(
+        side_effect=[ScalarResultFake([interest]), ScalarResultFake([])]
+    )
+    resolved = await interests.get_or_create_many(["go", "Rust", "rust", "  "])
+    assert resolved[0] is interest
+    assert resolved[1].name == "Rust"
+    assert len(resolved) == 2
 
 
 async def test_recommendation_repository_queries_and_mutations() -> None:

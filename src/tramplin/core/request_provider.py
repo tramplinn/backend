@@ -14,9 +14,11 @@ from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
+    CompanyRepository,
     CourseRepository,
     EmailJobRepository,
     FeedbackRepository,
+    InterestRepository,
     LessonProgressRepository,
     LessonRepository,
     McpOAuthRepository,
@@ -28,6 +30,7 @@ from tramplin.infrastructure.repositories import (
     RefreshTokenRepository,
     TagRepository,
     TrackRepository,
+    UniversityRepository,
     UserIdentityRepository,
     UserRepository,
 )
@@ -46,6 +49,7 @@ from tramplin.services.assets import AssetService
 from tramplin.services.contracts import CodeRunner
 from tramplin.services.course_plans import CoursePlanService
 from tramplin.services.courses import CourseService
+from tramplin.services.directories import CompanyService, InterestService, UniversityService
 from tramplin.services.email_auth import EmailAuthService
 from tramplin.services.feedback import FeedbackService
 from tramplin.services.lessons import LessonService
@@ -96,6 +100,9 @@ class RequestProvider(Provider):
     mcp_oauth = provide(McpOAuthRepository)
     tags = provide(TagRepository)
     email_jobs = provide(EmailJobRepository)
+    companies = provide(CompanyRepository)
+    universities = provide(UniversityRepository)
+    interests = provide(InterestRepository)
 
     @provide
     def session_service(
@@ -162,8 +169,24 @@ class RequestProvider(Provider):
         session: AsyncSession,
         users: UserRepository,
         identities: UserIdentityRepository,
+        companies: CompanyRepository,
+        universities: UniversityRepository,
+        interests: InterestRepository,
+        assets: AssetRepository,
     ) -> UserService:
-        return UserService(session, users, identities)
+        return UserService(session, users, identities, companies, universities, interests, assets)
+
+    @provide
+    def company_service(self, companies: CompanyRepository) -> CompanyService:
+        return CompanyService(companies)
+
+    @provide
+    def university_service(self, universities: UniversityRepository) -> UniversityService:
+        return UniversityService(universities)
+
+    @provide
+    def interest_service(self, interests: InterestRepository) -> InterestService:
+        return InterestService(interests)
 
     @provide
     def oauth_registry(

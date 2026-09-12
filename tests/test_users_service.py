@@ -1,13 +1,15 @@
 import pytest
+import uuid_utils.compat as uuid
 
 from tests.conftest import AuthEnv
 from tests.test_oauth_auth import start_login
 from tramplin.api.schemas.users import UserProfileUpdate
-from tramplin.api.v1.auth import update_me
+from tramplin.api.v1.auth import me, update_me
 from tramplin.api.v1.users import get_user_profile, search_users
-from tramplin.core.errors import ConflictError, ForbiddenError, NotFoundError
-from tramplin.models.enums import IdentityProvider, UserRole
-from tramplin.models.users import User
+from tramplin.core.errors import ConflictError, ForbiddenError, InvalidUpdateError, NotFoundError
+from tramplin.models.assets import Asset
+from tramplin.models.enums import AssetMime, IdentityProvider, UserRole
+from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import CourseActivity, ProfileStats
 from tramplin.services.users import ensure_role
 
@@ -55,12 +57,68 @@ async def test_update_profile_changes_only_public_fields(env: AuthEnv) -> None:
     assert updated.role is UserRole.STUDENT
 
 
+async def test_update_profile_sets_company_university_and_interests(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+
+    updated = await env.users_service.update_profile(
+        result.user.id,
+        {"company": "Yandex", "university": " МГУ ", "interests": ["Go", "go", " ", "Rust"]},
+    )
+
+    assert updated.company is not None and updated.company.name == "Yandex"
+    assert updated.university is not None and updated.university.name == "МГУ"
+    assert [interest.name for interest in updated.interests] == ["Go", "Rust"]
+
+    cleared = await env.users_service.update_profile(
+        result.user.id,
+        {"company": "", "university": None, "interests": []},
+    )
+
+    assert cleared.company is None
+    assert cleared.university is None
+    assert cleared.interests == []
+
+
+async def test_update_profile_accepts_pdf_resume_and_rejects_other_mime(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+    resume = env.assets.add(
+        Asset(filename="cv.pdf", mime=AssetMime.PDF, size=10, s3_key="assets/cv.pdf")
+    )
+    cover = env.assets.add(
+        Asset(filename="cover.png", mime=AssetMime.PNG, size=10, s3_key="assets/cover.png")
+    )
+
+    updated = await env.users_service.update_profile(result.user.id, {"resume_asset_id": resume.id})
+    assert updated.resume_asset_id == resume.id
+
+    with pytest.raises(InvalidUpdateError):
+        await env.users_service.update_profile(result.user.id, {"resume_asset_id": cover.id})
+
+    with pytest.raises(NotFoundError):
+        await env.users_service.update_profile(result.user.id, {"resume_asset_id": uuid.uuid7()})
+
+    cleared = await env.users_service.update_profile(result.user.id, {"resume_asset_id": None})
+    assert cleared.resume_asset_id is None
+
+
+async def test_me_route_exposes_resume_url(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+    resume = env.assets.add(
+        Asset(filename="cv.pdf", mime=AssetMime.PDF, size=10, s3_key="assets/cv.pdf")
+    )
+    await env.users_service.update_profile(result.user.id, {"resume_asset_id": resume.id})
+
+    profile = await me(result.user, env.users_service, env.settings)
+
+    assert profile.resume_url == f"{env.settings.s3_public_base_url}/assets/cv.pdf"
+
+
 async def test_public_user_routes_hide_private_fields(env: AuthEnv) -> None:
     result = await env.github.complete_callback("code", await start_login(env.github))
     env.users.stats = ProfileStats(1, 2, 3)
 
     page = await search_users(env.users_service, q="student", limit=24, offset=0)
-    profile = await get_user_profile(result.user.login, env.users_service)
+    profile = await get_user_profile(result.user.login, env.users_service, env.settings)
 
     assert page.items[0].login == result.user.login
     assert not hasattr(page.items[0], "email")
@@ -74,6 +132,7 @@ async def test_update_me_route_returns_refreshed_profile(env: AuthEnv) -> None:
         UserProfileUpdate(headline="Делаю API"),
         result.user,
         env.users_service,
+        env.settings,
     )
 
     assert profile.headline == "Делаю API"
@@ -86,6 +145,23 @@ async def test_missing_public_and_editable_profiles_are_not_found(env: AuthEnv) 
         await env.users_service.get_public_profile("missing")
     with pytest.raises(NotFoundError):
         await env.users_service.update_profile(User(login="missing").id, {"bio": "no"})
+
+
+async def test_unlink_identity_removes_one_of_several(env: AuthEnv) -> None:
+    result = await env.github.complete_callback("code", await start_login(env.github))
+    env.identities.add(
+        UserIdentity(
+            user_id=result.user.id,
+            provider=IdentityProvider.EMAIL,
+            provider_id=result.user.id.hex,
+            email="student@example.com",
+        )
+    )
+
+    await env.users_service.unlink_identity(result.user.id, IdentityProvider.GITHUB)
+
+    remaining = await env.identities.list_for_user(result.user.id)
+    assert [identity.provider for identity in remaining] == [IdentityProvider.EMAIL]
 
 
 async def test_unlink_last_identity_is_rejected(env: AuthEnv) -> None:

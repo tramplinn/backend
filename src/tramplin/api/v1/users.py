@@ -5,6 +5,8 @@ from fastapi import APIRouter, Query
 
 from tramplin.api.schemas.pagination import PageOut
 from tramplin.api.schemas.users import CourseActivityOut, PublicProfileOut, PublicUserOut
+from tramplin.api.user_mapping import with_resume_url
+from tramplin.core.config import Settings
 from tramplin.services.users import UserService
 
 router = APIRouter(prefix="/users", tags=["users"], route_class=DishkaRoute)
@@ -36,9 +38,13 @@ async def search_users(
     summary="Публичный профиль пользователя",
     description="Профиль по логину вместе со сводной статистикой обучения.",
 )
-async def get_user_profile(login: str, users: FromDishka[UserService]) -> PublicProfileOut:
+async def get_user_profile(
+    login: str,
+    users: FromDishka[UserService],
+    settings: FromDishka[Settings],
+) -> PublicProfileOut:
     user, stats, courses = await users.get_public_profile(login)
-    return PublicProfileOut(
+    profile = PublicProfileOut(
         **PublicUserOut.model_validate(user).model_dump(),
         bio=user.bio,
         completed_lessons=stats.completed_lessons,
@@ -46,3 +52,4 @@ async def get_user_profile(login: str, users: FromDishka[UserService]) -> Public
         solved_algorithms=stats.solved_algorithms,
         active_courses=[CourseActivityOut.model_validate(course) for course in courses],
     )
+    return with_resume_url(profile, user, asset_base_url=settings.s3_public_base_url)

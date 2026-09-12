@@ -4,17 +4,28 @@ import uuid_utils.compat as uuid
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Column,
     ForeignKey,
     Index,
     SmallInteger,
     String,
+    Table,
     Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tramplin.models.base import UUIDPrimaryKey
+from tramplin.models.assets import Asset
+from tramplin.models.base import Base, UUIDPrimaryKey
+from tramplin.models.directories import Company, Interest, University
 from tramplin.models.enums import IdentityProvider, UserRole
+
+user_interests = Table(
+    "user_interests",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("interest_id", ForeignKey("interests.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class User(UUIDPrimaryKey):
@@ -36,6 +47,15 @@ class User(UUIDPrimaryKey):
     specialty: Mapped[str | None] = mapped_column(String(32))
     grade: Mapped[str | None] = mapped_column(String(16))
     experience_years: Mapped[int | None] = mapped_column(SmallInteger())
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL")
+    )
+    university_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("universities.id", ondelete="SET NULL")
+    )
+    resume_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True, server_default="true")
     password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(
@@ -47,6 +67,12 @@ class User(UUIDPrimaryKey):
         back_populates="user",
         cascade="all, delete-orphan",
         foreign_keys="UserIdentity.user_id",
+    )
+    company: Mapped[Company | None] = relationship(foreign_keys=[company_id])
+    university: Mapped[University | None] = relationship(foreign_keys=[university_id])
+    resume_asset: Mapped[Asset | None] = relationship(foreign_keys=[resume_asset_id])
+    interests: Mapped[list[Interest]] = relationship(
+        secondary=user_interests, order_by="Interest.name"
     )
 
 
@@ -82,3 +108,6 @@ class RefreshToken(UUIDPrimaryKey):
 Index("ix_user_identities_user_id", UserIdentity.user_id)
 Index("ix_refresh_tokens_user_id", RefreshToken.user_id)
 Index("ix_refresh_tokens_expired_at", RefreshToken.expired_at)
+Index("ix_users_company_id", User.company_id)
+Index("ix_users_university_id", User.university_id)
+Index("ix_users_resume_asset_id", User.resume_asset_id)

@@ -15,6 +15,7 @@ from tramplin.api.schemas import (
     ProvidersOut,
 )
 from tramplin.api.schemas.users import UserProfileUpdate
+from tramplin.api.user_mapping import me_out
 from tramplin.core.config import Settings
 from tramplin.models.enums import IdentityProvider
 from tramplin.services.email_auth import EmailAuthService
@@ -206,8 +207,13 @@ async def email_link_verify(
     summary="Текущий пользователь",
     description="Полный профиль вошедшего пользователя, включая приватные поля.",
 )
-async def me(user: CurrentUser, users: FromDishka[UserService]) -> MeOut:
-    return MeOut.model_validate(await users.get_profile(user.id))
+async def me(
+    user: CurrentUser,
+    users: FromDishka[UserService],
+    settings: FromDishka[Settings],
+) -> MeOut:
+    profile = await users.get_profile(user.id)
+    return me_out(profile, asset_base_url=settings.s3_public_base_url)
 
 
 @router.patch(
@@ -219,9 +225,10 @@ async def update_me(
     payload: UserProfileUpdate,
     user: CurrentUser,
     users: FromDishka[UserService],
+    settings: FromDishka[Settings],
 ) -> MeOut:
     updated = await users.update_profile(user.id, payload.model_dump(exclude_unset=True))
-    return MeOut.model_validate(updated)
+    return me_out(updated, asset_base_url=settings.s3_public_base_url)
 
 
 @router.delete(

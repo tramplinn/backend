@@ -4,11 +4,15 @@ import pytest
 from pydantic import SecretStr
 
 from tests.fakes import (
+    FakeAssetRepository,
+    FakeCompanyRepository,
     FakeGitHubClient,
     FakeIdentityRepository,
+    FakeInterestRepository,
     FakeRefreshTokenRepository,
     FakeSession,
     FakeStateStore,
+    FakeUniversityRepository,
     FakeUserRepository,
 )
 from tramplin.core.config import Settings
@@ -32,6 +36,8 @@ class AuthEnv:
     users: FakeUserRepository
     identities: FakeIdentityRepository
     refresh_tokens: FakeRefreshTokenRepository
+    assets: FakeAssetRepository
+    settings: Settings
 
 
 @pytest.fixture
@@ -68,6 +74,7 @@ def env(settings: Settings, codec: AccessTokenCodec, github_profile: OAuthProfil
     users = FakeUserRepository()
     identities = FakeIdentityRepository(users.users)
     refresh_tokens = FakeRefreshTokenRepository()
+    assets = FakeAssetRepository()
     sessions = SessionService(
         session=session,
         users=users,
@@ -90,8 +97,14 @@ def env(settings: Settings, codec: AccessTokenCodec, github_profile: OAuthProfil
             session=session,
             users=users,
             identities=identities,
+            companies=FakeCompanyRepository(),
+            universities=FakeUniversityRepository(),
+            interests=FakeInterestRepository(),
+            assets=assets,
         ),
         users=users,
         identities=identities,
         refresh_tokens=refresh_tokens,
+        assets=assets,
+        settings=settings,
     )

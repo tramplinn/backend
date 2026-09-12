@@ -6,6 +6,7 @@ from tramplin.api.v1.assets import router as assets_router
 from tramplin.api.v1.auth import router as auth_router
 from tramplin.api.v1.authoring import router as authoring_router
 from tramplin.api.v1.content import router as content_router
+from tramplin.api.v1.directories import router as directories_router
 from tramplin.api.v1.feedback import admin_router as feedback_admin_router
 from tramplin.api.v1.feedback import router as feedback_router
 from tramplin.api.v1.health import router as health_router
@@ -21,6 +22,7 @@ api_router.include_router(health_router)
 api_router.include_router(auth_router)
 api_router.include_router(oauth_router)
 api_router.include_router(content_router)
+api_router.include_router(directories_router)
 api_router.include_router(news_router)
 api_router.include_router(users_router)
 api_router.include_router(feedback_router)

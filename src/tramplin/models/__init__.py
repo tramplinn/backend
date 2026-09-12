@@ -20,6 +20,7 @@ from tramplin.models.content import (
     Track,
     TrackCourse,
 )
+from tramplin.models.directories import Company, Interest, University
 from tramplin.models.enums import (
     AssetMime,
     ContentStatus,
@@ -48,6 +49,7 @@ __all__ = [
     "Asset",
     "AssetMime",
     "Base",
+    "Company",
     "ContentStatus",
     "Course",
     "EmailJobOutbox",
@@ -57,6 +59,7 @@ __all__ = [
     "FeedbackAttachment",
     "FeedbackStatus",
     "IdentityProvider",
+    "Interest",
     "InterviewCard",
     "Lesson",
     "LessonProgress",
@@ -76,6 +79,7 @@ __all__ = [
     "RefreshToken",
     "Track",
     "TrackCourse",
+    "University",
     "User",
     "UserIdentity",
     "UserRole",
