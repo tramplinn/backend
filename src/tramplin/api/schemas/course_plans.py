@@ -32,28 +32,43 @@ class CoursePlanQuiz(ApiModel):
     questions: list[CoursePlanQuestion] = Field(default_factory=list)
 
 
+class CoursePlanPracticeSet(ApiModel):
+    """Набор практики не имеет slug (его нет и в БД): в пределах модуля он matched по title."""
+
+    title: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    mode: Literal["practice", "mock_interview"] = "practice"
+    duration_minutes: int | None = Field(default=None, ge=1, le=480)
+    problem_slugs: list[str] = Field(default_factory=list)
+
+
 class CoursePlanModule(ApiModel):
     title: str = Field(min_length=1, max_length=200)
     slug: str = Field(pattern=SLUG_PATTERN, max_length=120)
     summary: str | None = None
     lessons: list[CoursePlanLesson] = Field(default_factory=list)
     quizzes: list[CoursePlanQuiz] = Field(default_factory=list)
+    practice_sets: list[CoursePlanPracticeSet] = Field(default_factory=list)
     content_order: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_slugs_and_order(self) -> Self:
         lesson_slugs = [item.slug for item in self.lessons]
         quiz_slugs = [item.slug for item in self.quizzes]
-        all_slugs = lesson_slugs + quiz_slugs
+        practice_titles = [item.title for item in self.practice_sets]
+        all_slugs = lesson_slugs + quiz_slugs + practice_titles
         if len(set(lesson_slugs)) != len(lesson_slugs):
             raise ValueError("lesson slug должен быть уникальным внутри модуля")
         if len(set(quiz_slugs)) != len(quiz_slugs):
             raise ValueError("quiz slug должен быть уникальным внутри модуля")
+        if len(set(practice_titles)) != len(practice_titles):
+            raise ValueError("practice set title должен быть уникальным внутри модуля")
         if self.content_order and (
             len(self.content_order) != len(all_slugs) or set(self.content_order) != set(all_slugs)
         ):
             raise ValueError(
-                "content_order должен содержать каждый lesson/quiz slug ровно один раз"
+                "content_order должен содержать каждый lesson/quiz slug и practice set title "
+                "ровно один раз"
             )
         return self
 

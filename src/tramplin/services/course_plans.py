@@ -11,10 +11,12 @@ from tramplin.api.schemas.course_plans import (
     CoursePlanQuestion,
 )
 from tramplin.core.errors import InvalidQuizError, NotFoundError
+from tramplin.models.algorithms import PracticeSet, PracticeSetProblem
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, InterviewCard, Lesson, Module, ModuleItem
-from tramplin.models.enums import ContentStatus, QuestionType
+from tramplin.models.enums import ContentStatus, PracticeMode, QuestionType
 from tramplin.models.quizzes import Quiz, QuizQuestion
+from tramplin.services.algorithm_ports import AlgorithmAuthoringRepositoryPort
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import Transaction
 from tramplin.services.courses import CourseRepositoryPort
@@ -43,6 +45,7 @@ class CoursePlanService:
         lessons: LessonRepositoryPort,
         quizzes: QuizRepositoryPort,
         assets: AssetRepositoryPort,
+        algorithms: AlgorithmAuthoringRepositoryPort,
     ) -> None:
         self._transaction = transaction
         self._courses = courses
@@ -50,6 +53,7 @@ class CoursePlanService:
         self._lessons = lessons
         self._quizzes = quizzes
         self._assets = assets
+        self._algorithms = algorithms
 
     async def apply(self, plan: CoursePlanApply, actor_id: uuid.UUID) -> tuple[Course, ApplyStats]:
         stats = ApplyStats()
@@ -229,7 +233,62 @@ class CoursePlanService:
             await self._apply_questions(quiz, quiz_plan.questions, actor_id, stats)
             item_by_slug[quiz.slug] = item
 
-        desired_slugs = plan.content_order or [*lessons, *(quiz.slug for quiz in quiz_plans)]
+        existing_practice_sets = {
+            item.practice_set.title: item.practice_set
+            for item in module.items
+            if item.practice_set is not None
+        }
+        for practice_plan in plan.practice_sets:
+            problem_ids = [
+                require(
+                    await self._algorithms.get_problem_by_slug(slug),
+                    NotFoundError(f"Задача '{slug}' не найдена"),
+                ).id
+                for slug in practice_plan.problem_slugs
+            ]
+            practice_set = existing_practice_sets.get(practice_plan.title)
+            if practice_set is None:
+                practice_set = PracticeSet(
+                    title=practice_plan.title,
+                    description=practice_plan.description,
+                    mode=PracticeMode(practice_plan.mode),
+                    duration_minutes=practice_plan.duration_minutes,
+                    status=ContentStatus.DRAFT,
+                )
+                practice_set.problems = []
+                mark_created(practice_set, actor_id)
+                self._algorithms.add_set(practice_set)
+                # ModuleItem.practice_set — viewonly, ORM не строит по нему порядок flush: без
+                # явного flush тут INSERT INTO module_items мог уйти раньше INSERT INTO
+                # practice_sets и упасть на FK-ограничении.
+                await self._transaction.flush()
+                item = self._new_item(module, actor_id, practice_set_id=practice_set.id)
+                stats.created += 1
+            else:
+                loaded = await self._algorithms.get_set(practice_set.id, published_only=False)
+                practice_set = loaded or practice_set
+                self._update(
+                    practice_set,
+                    {
+                        "title": practice_plan.title,
+                        "description": practice_plan.description,
+                        "mode": PracticeMode(practice_plan.mode),
+                        "duration_minutes": practice_plan.duration_minutes,
+                    },
+                    actor_id,
+                    stats,
+                )
+                item = next(
+                    item for item in module.items if item.practice_set_id == practice_set.id
+                )
+            await self._apply_practice_problems(practice_set, problem_ids, actor_id, stats)
+            item_by_slug[practice_plan.title] = item
+
+        desired_slugs = plan.content_order or [
+            *lessons,
+            *(quiz.slug for quiz in quiz_plans),
+            *(practice.title for practice in plan.practice_sets),
+        ]
         desired_items = [item_by_slug[slug] for slug in desired_slugs]
         desired_ids = {item.id for item in desired_items}
         preserved_items = [item for item in module.items if item.id not in desired_ids]
@@ -270,6 +329,44 @@ class CoursePlanService:
                 values["attachments"] = attachments
                 self._update(question, values, actor_id, stats)
 
+    async def _apply_practice_problems(
+        self,
+        practice_set: PracticeSet,
+        problem_ids: list[uuid.UUID],
+        actor_id: uuid.UUID,
+        stats: ApplyStats,
+    ) -> None:
+        existing = {item.problem_id: item for item in practice_set.problems}
+        desired_ids = set(problem_ids)
+        preserved = [item for item in practice_set.problems if item.problem_id not in desired_ids]
+        # Тот же трюк, что и с модулями: сначала уводим задачи вне плана во временный
+        # отрицательный диапазон, чтобы финальная расстановка позиций не столкнулась с
+        # uq на (practice_set_id, position).
+        for offset, item in enumerate(preserved):
+            item.position = -(offset + 1)
+        if preserved:
+            await self._transaction.flush()
+        desired_items: list[PracticeSetProblem] = []
+        for problem_id in problem_ids:
+            found = existing.get(problem_id)
+            if found is None:
+                found = PracticeSetProblem(
+                    practice_set_id=practice_set.id,
+                    problem_id=problem_id,
+                    position=len(desired_items),
+                    recommended_minutes=None,
+                )
+                mark_created(found, actor_id)
+                self._algorithms.add_set_problem(found)
+                practice_set.problems.append(found)
+                stats.created += 1
+            else:
+                stats.unchanged += 1
+            desired_items.append(found)
+        for position, item in enumerate([*desired_items, *preserved]):
+            item.position = position
+            item.updated_by = actor_id
+
     async def _render_lesson(self, lesson: Lesson, actor_id: uuid.UUID) -> None:
         rendered = await to_thread.run_sync(render_lesson_content, lesson.body_md)
         lesson.body_html = rendered.body_html
@@ -303,13 +400,14 @@ class CoursePlanService:
         *,
         lesson_id: uuid.UUID | None = None,
         quiz_id: uuid.UUID | None = None,
+        practice_set_id: uuid.UUID | None = None,
     ) -> ModuleItem:
         item = ModuleItem(
             module_id=module.id,
             position=len(module.items),
             lesson_id=lesson_id,
             quiz_id=quiz_id,
-            practice_set_id=None,
+            practice_set_id=practice_set_id,
             created_by=actor_id,
             updated_by=actor_id,
         )
@@ -319,7 +417,7 @@ class CoursePlanService:
 
     @staticmethod
     def _update(
-        entity: Course | Module | Lesson | Quiz | QuizQuestion,
+        entity: Course | Module | Lesson | Quiz | QuizQuestion | PracticeSet,
         values: dict[str, object],
         actor_id: uuid.UUID,
         stats: ApplyStats,

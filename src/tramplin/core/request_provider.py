@@ -133,8 +133,9 @@ class RequestProvider(Provider):
         lessons: LessonRepository,
         quizzes: QuizRepository,
         assets: AssetRepository,
+        algorithms: AlgorithmRepository,
     ) -> CoursePlanService:
-        return CoursePlanService(session, courses, modules, lessons, quizzes, assets)
+        return CoursePlanService(session, courses, modules, lessons, quizzes, assets, algorithms)
 
     @provide
     def algorithm_plan_service(

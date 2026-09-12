@@ -6,9 +6,10 @@ import uuid_utils.compat as uuid
 from tests.fakes import FakeSession
 from tramplin.api.schemas.course_plans import CoursePlanApply
 from tramplin.core.errors import InvalidQuizError, NotFoundError
+from tramplin.models.algorithms import AlgorithmProblem, PracticeSet, PracticeSetProblem
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, Lesson, Module, ModuleItem
-from tramplin.models.enums import AssetMime
+from tramplin.models.enums import AlgorithmDifficulty, AssetMime
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.course_plans import CoursePlanService
 
@@ -83,14 +84,39 @@ class AssetRepo:
         return self.assets.get(asset_id)
 
 
+class AlgorithmsRepo:
+    def __init__(self, problems: list[AlgorithmProblem] | None = None) -> None:
+        self.problems = {problem.slug: problem for problem in problems or []}
+        self.sets: list[PracticeSet] = []
+        self.set_problems: list[PracticeSetProblem] = []
+
+    async def get_problem_by_slug(self, slug: str) -> AlgorithmProblem | None:
+        return self.problems.get(slug)
+
+    def add_set(self, practice_set: PracticeSet) -> PracticeSet:
+        self.sets.append(practice_set)
+        return practice_set
+
+    def add_set_problem(self, item: PracticeSetProblem) -> PracticeSetProblem:
+        self.set_problems.append(item)
+        return item
+
+    async def get_set(self, set_id: uuid.UUID, *, published_only: bool) -> PracticeSet | None:
+        return next((item for item in self.sets if item.id == set_id), None)
+
+
 def make_service(
     assets: list[Asset] | None = None,
-) -> tuple[CoursePlanService, FakeSession, CourseRepo, ModuleRepo, LessonRepo, QuizRepo]:
+    problems: list[AlgorithmProblem] | None = None,
+) -> tuple[
+    CoursePlanService, FakeSession, CourseRepo, ModuleRepo, LessonRepo, QuizRepo, AlgorithmsRepo
+]:
     transaction = FakeSession()
     courses = CourseRepo()
     modules = ModuleRepo()
     lessons = LessonRepo()
     quizzes = QuizRepo()
+    algorithms = AlgorithmsRepo(problems)
     service = CoursePlanService(
         transaction,
         cast(Any, courses),
@@ -98,8 +124,9 @@ def make_service(
         cast(Any, lessons),
         cast(Any, quizzes),
         cast(Any, AssetRepo(assets)),
+        cast(Any, algorithms),
     )
-    return service, transaction, courses, modules, lessons, quizzes
+    return service, transaction, courses, modules, lessons, quizzes, algorithms
 
 
 def course_plan(asset_id: uuid.UUID | None = None) -> CoursePlanApply:
@@ -156,7 +183,7 @@ def course_plan(asset_id: uuid.UUID | None = None) -> CoursePlanApply:
 
 async def test_apply_creates_and_then_updates_complete_course_plan() -> None:
     asset = Asset(s3_key="course/a.pdf", filename="a.pdf", mime=AssetMime.PDF, size=10)
-    service, transaction, _, modules, lessons, quizzes = make_service([asset])
+    service, transaction, _, modules, lessons, quizzes, _ = make_service([asset])
     actor_id = uuid.uuid7()
 
     course, created = await service.apply(course_plan(asset.id), actor_id)
@@ -217,6 +244,76 @@ async def test_apply_repositions_module_left_out_of_a_later_plan() -> None:
     advanced = next(module for module in modules.modules if module.slug == "advanced")
     assert advanced.position == 0
     assert basics.position == 1
+
+
+async def test_apply_creates_and_updates_a_practice_set() -> None:
+    problem = AlgorithmProblem(
+        slug="two-sum", title="Two Sum", difficulty=AlgorithmDifficulty.EASY
+    )
+    service, _, _, modules, _, _, algorithms = make_service(problems=[problem])
+    actor_id = uuid.uuid7()
+    plan = CoursePlanApply.model_validate(
+        {
+            "title": "Python",
+            "slug": "python",
+            "modules": [
+                {
+                    "title": "Основы",
+                    "slug": "basics",
+                    "practice_sets": [
+                        {
+                            "title": "Разминка",
+                            "description": "Пара лёгких задач",
+                            "mode": "practice",
+                            "problem_slugs": ["two-sum"],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    course, created = await service.apply(plan, actor_id)
+
+    assert created.created == 4  # course, module, practice set, set problem
+    assert len(algorithms.sets) == 1
+    practice_set = algorithms.sets[0]
+    assert practice_set.title == "Разминка"
+    assert [item.problem_id for item in practice_set.problems] == [problem.id]
+    assert modules.items[0].practice_set_id == practice_set.id
+
+    course.modules = modules.modules
+    module = modules.modules[0]
+    module.items = modules.items
+    for item in module.items:
+        if item.practice_set_id == practice_set.id:
+            item.practice_set = practice_set
+
+    updated_plan = CoursePlanApply.model_validate(
+        {
+            "title": "Python",
+            "slug": "python",
+            "modules": [
+                {
+                    "title": "Основы",
+                    "slug": "basics",
+                    "practice_sets": [
+                        {
+                            "title": "Разминка",
+                            "description": "Обновлённое описание",
+                            "problem_slugs": ["two-sum"],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    _, updated = await service.apply(updated_plan, actor_id)
+
+    assert len(algorithms.sets) == 1
+    assert practice_set.description == "Обновлённое описание"
+    assert updated.unchanged >= 1  # the already-present set problem is left as-is
 
 
 async def test_apply_rejects_cross_module_lesson_link() -> None:
