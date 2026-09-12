@@ -792,6 +792,7 @@ async def test_worker_stops_on_first_failure_and_maps_internal_error(settings: A
     assert submission.stdout is None
     assert submission.result_json is not None
     failed_case = submission.result_json["failed_case"]
+    assert isinstance(failed_case, dict)
     assert failed_case["position"] == 1
     assert failed_case["input"] == "secret"
     assert failed_case["expected_output"] == "no"
