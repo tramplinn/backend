@@ -5,11 +5,6 @@ from dataclasses import dataclass
 import uuid_utils.compat as uuid
 from anyio import to_thread
 
-from tramplin.api.schemas.course_plans import (
-    CoursePlanApply,
-    CoursePlanModule,
-    CoursePlanQuestion,
-)
 from tramplin.core.errors import InvalidQuizError, NotFoundError
 from tramplin.models.algorithms import PracticeSet, PracticeSetProblem
 from tramplin.models.assets import Asset
@@ -19,6 +14,11 @@ from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.algorithm_ports import AlgorithmAuthoringRepositoryPort
 from tramplin.services.assets import AssetRepositoryPort
 from tramplin.services.contracts import Transaction
+from tramplin.services.course_plan_schemas import (
+    CoursePlanApply,
+    CoursePlanModule,
+    CoursePlanQuestion,
+)
 from tramplin.services.courses import CourseRepositoryPort
 from tramplin.services.entity_updates import mark_created, mark_updated, require
 from tramplin.services.lesson_markdown import render_lesson_content

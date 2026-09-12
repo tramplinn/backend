@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid_utils.compat as uuid
 
-from tramplin.api.schemas.algorithm_plans import AlgorithmPlanApply, TemplatePlan, TestCasePlan
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmTemplate, AlgorithmTestCase
 from tramplin.models.enums import ContentStatus
+from tramplin.services.algorithm_plan_schemas import AlgorithmPlanApply, TemplatePlan, TestCasePlan
 from tramplin.services.algorithm_ports import AlgorithmAuthoringRepositoryPort
 from tramplin.services.contracts import Transaction
 from tramplin.services.course_plans import ApplyStats
