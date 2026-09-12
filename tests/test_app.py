@@ -157,6 +157,19 @@ def test_constraint_name_is_read_through_the_driver_wrapper() -> None:
     assert body["message"] == "В этом модуле уже есть урок с таким адресом"
 
 
+def test_fk_restrict_violation_explains_the_delete_is_blocked() -> None:
+    """RESTRICT — это не «уже существует», а «нельзя удалить, есть зависимые записи»."""
+    error = IntegrityError(
+        "DELETE",
+        {},
+        _UniqueViolationError("fk_algorithm_submissions_problem_id_algorithm_problems"),
+    )
+
+    body = json.loads(bytes(exception_response(error).body))
+
+    assert body["message"] == "Нельзя удалить задачу: по ней уже есть отправленные решения"
+
+
 def test_unknown_constraint_keeps_the_generic_conflict() -> None:
     error = IntegrityError("INSERT", {}, _UniqueViolationError("uq_module_items_quiz_id"))
 
