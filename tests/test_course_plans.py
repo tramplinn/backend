@@ -247,9 +247,7 @@ async def test_apply_repositions_module_left_out_of_a_later_plan() -> None:
 
 
 async def test_apply_creates_and_updates_a_practice_set() -> None:
-    problem = AlgorithmProblem(
-        slug="two-sum", title="Two Sum", difficulty=AlgorithmDifficulty.EASY
-    )
+    problem = AlgorithmProblem(slug="two-sum", title="Two Sum", difficulty=AlgorithmDifficulty.EASY)
     service, _, _, modules, _, _, algorithms = make_service(problems=[problem])
     actor_id = uuid.uuid7()
     plan = CoursePlanApply.model_validate(
