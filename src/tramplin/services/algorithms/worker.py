@@ -113,6 +113,7 @@ class AlgorithmWorkerService:
         total_runtime, max_memory = 0, 0
         final_verdict = AlgorithmVerdict.ACCEPTED
         failed_test: int | None = None
+        last_case_io: tuple[int | None, str | None, str | None] | None = None
         for position, stdin, expected in cases:
             job = await self._runner.submit(
                 RunRequest(
@@ -136,19 +137,24 @@ class AlgorithmWorkerService:
                 else AlgorithmVerdict.INTERNAL_ERROR
             )
             stdout = bounded_output(result.stdout, self._settings.algorithm_output_max_bytes)
-            stderr = bounded_output(
-                result.stderr or result.compile_output, self._settings.algorithm_output_max_bytes
+            stderr = bounded_output(result.stderr, self._settings.algorithm_output_max_bytes)
+            compile_output = bounded_output(
+                result.compile_output, self._settings.algorithm_output_max_bytes
             )
+            message = bounded_output(result.message, self._settings.algorithm_output_max_bytes)
             results.append(
                 {
                     "position": position,
                     "verdict": verdict.value,
                     "stdout": stdout,
                     "stderr": stderr,
+                    "compile_output": compile_output,
+                    "message": message,
                     "runtime_ms": result.runtime_ms,
                     "memory_kb": result.memory_kb,
                 }
             )
+            last_case_io = (position, stdin, expected)
             total_runtime += result.runtime_ms or 0
             max_memory = max(max_memory, result.memory_kb or 0)
             if verdict is not AlgorithmVerdict.ACCEPTED:
@@ -165,11 +171,22 @@ class AlgorithmWorkerService:
             failed_test,
         )
         submission.finished_at, submission.judge_token = utc_now(), None
-        submission.result_json = (
-            {"cases": results} if submission.kind is SubmissionKind.RUN else None
-        )
-        if submission.kind is SubmissionKind.RUN and len(results) == 1:
-            submission.stdout, submission.stderr = results[0]["stdout"], results[0]["stderr"]
+        if submission.kind is SubmissionKind.RUN:
+            submission.result_json = {"cases": results}
+            if len(results) == 1:
+                submission.stdout, submission.stderr = results[0]["stdout"], results[0]["stderr"]
+        elif final_verdict is not AlgorithmVerdict.ACCEPTED and results and last_case_io:
+            _, case_input, case_expected = last_case_io
+            last_result = dict(results[-1])
+            last_result.pop("verdict", None)
+            failed_case = {
+                **last_result,
+                "input": case_input,
+                "expected_output": case_expected,
+            }
+            submission.result_json = {"failed_case": failed_case}
+        else:
+            submission.result_json = None
         await self._update_progress(submission)
         await self._transaction.commit()
 

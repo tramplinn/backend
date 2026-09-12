@@ -1,4 +1,5 @@
 from tramplin.api.schemas.algorithms import (
+    FailedCaseOut,
     PracticeSetOut,
     ProblemAuthorOut,
     ProblemCardOut,
@@ -107,6 +108,10 @@ def submission_out(submission: AlgorithmSubmission) -> SubmissionOut:
         if isinstance(raw_cases, list)
         else []
     )
+    raw_failed_case = submission.result_json.get("failed_case") if submission.result_json else None
+    failed_case = (
+        FailedCaseOut.model_validate(raw_failed_case) if isinstance(raw_failed_case, dict) else None
+    )
     return SubmissionOut(
         id=submission.id,
         session_id=submission.session_id,
@@ -122,6 +127,7 @@ def submission_out(submission: AlgorithmSubmission) -> SubmissionOut:
         stderr=submission.stderr if submission.kind.value == "run" else None,
         safe_error=submission.safe_error,
         cases=cases if submission.kind.value == "run" else [],
+        failed_case=failed_case if submission.kind.value == "submit" else None,
         created_at=submission.created_at,
         finished_at=submission.finished_at,
     )

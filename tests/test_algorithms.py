@@ -789,7 +789,16 @@ async def test_worker_stops_on_first_failure_and_maps_internal_error(settings: A
     await worker.process_next()
     assert submission.verdict is AlgorithmVerdict.WRONG_ANSWER
     assert submission.failed_test == 1
-    assert submission.stdout is None and submission.result_json is None
+    assert submission.stdout is None
+    assert submission.result_json is not None
+    failed_case = submission.result_json["failed_case"]
+    assert failed_case["position"] == 1
+    assert failed_case["input"] == "secret"
+    assert failed_case["expected_output"] == "no"
+    output = submission_out(submission)
+    assert output.failed_case is not None
+    assert output.failed_case.input == "secret"
+    assert output.failed_case.expected_output == "no"
 
 
 async def test_broker_worker_handles_duplicate_retry_and_poison_jobs(settings: Any) -> None:

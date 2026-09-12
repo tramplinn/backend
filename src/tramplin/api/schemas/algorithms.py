@@ -216,6 +216,20 @@ class RunCaseOut(ApiModel):
     verdict: AlgorithmVerdict
     stdout: str | None
     stderr: str | None
+    compile_output: str | None = None
+    message: str | None = None
+    runtime_ms: int | None
+    memory_kb: int | None
+
+
+class FailedCaseOut(ApiModel):
+    position: int | None
+    input: str | None
+    expected_output: str | None
+    stdout: str | None
+    stderr: str | None
+    compile_output: str | None
+    message: str | None
     runtime_ms: int | None
     memory_kb: int | None
 
@@ -235,6 +249,7 @@ class SubmissionOut(ApiModel):
     stderr: str | None
     safe_error: str | None
     cases: list[RunCaseOut] = Field(default_factory=list)
+    failed_case: FailedCaseOut | None = None
     created_at: datetime
     finished_at: datetime | None
 

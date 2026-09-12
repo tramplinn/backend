@@ -11,6 +11,8 @@ class CaseResult(TypedDict):
     verdict: str
     stdout: str | None
     stderr: str | None
+    compile_output: str | None
+    message: str | None
     runtime_ms: int | None
     memory_kb: int | None
 
