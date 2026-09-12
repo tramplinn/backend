@@ -71,6 +71,9 @@ class NewsService:
             NotFoundError("Новость не найдена"),
         )
 
+    async def get_by_id(self, news_id: uuid.UUID) -> News:
+        return require(await self._news.get(news_id), NotFoundError("Новость не найдена"))
+
     async def create(
         self,
         news: News,

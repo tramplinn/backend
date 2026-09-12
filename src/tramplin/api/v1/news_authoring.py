@@ -34,6 +34,20 @@ async def list_drafts(
     )
 
 
+@router.get(
+    "/{news_id}",
+    summary="Новость по id (автор)",
+    description="Черновики видны только здесь: публичный роут отдаёт лишь опубликованное.",
+)
+async def get_news(
+    news_id: uuid.UUID,
+    _: TeacherUser,
+    news: FromDishka[NewsService],
+    settings: FromDishka[Settings],
+) -> NewsOut:
+    return news_out(await news.get_by_id(news_id), asset_base_url=settings.s3_public_base_url)
+
+
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,

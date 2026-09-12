@@ -117,6 +117,8 @@ async def test_unknown_news_is_not_found() -> None:
     with pytest.raises(NotFoundError):
         await editor.get("missing")
     with pytest.raises(NotFoundError):
+        await editor.get_by_id(new_id())
+    with pytest.raises(NotFoundError):
         await editor.update(new_id(), {}, new_id())
     with pytest.raises(NotFoundError):
         await editor.delete(new_id())
@@ -137,6 +139,7 @@ async def test_list_and_delete_pass_through() -> None:
     assert page.items == [news]
     assert (page.total, page.limit, page.offset) == (1, 5, 0)
     assert await editor.get("n") is news
+    assert await editor.get_by_id(news.id) is news
 
     await editor.delete(news.id)
     repository.delete.assert_awaited_once_with(news)
