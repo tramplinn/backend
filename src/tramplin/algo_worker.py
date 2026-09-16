@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from tramplin.core.config import Settings, load_settings
 from tramplin.infrastructure.algorithm_queue import FastStreamSubmissionQueue
-from tramplin.infrastructure.judge0 import Judge0CodeRunner
 from tramplin.infrastructure.outbox_worker import (
     build_engine_and_sessionmaker,
     cancel_and_await,
@@ -18,6 +17,7 @@ from tramplin.infrastructure.outbox_worker import (
     run_cli,
 )
 from tramplin.infrastructure.outbox_worker import rabbitmq_is_healthy as _rabbitmq_is_healthy
+from tramplin.infrastructure.piston import PistonCodeRunner
 from tramplin.infrastructure.repositories.algorithms import AlgorithmRepository
 from tramplin.services.algorithms import AlgorithmDispatchService, AlgorithmWorkerService
 
@@ -43,7 +43,7 @@ class AlgorithmWorkerApplication:
         )
         self.submission_queue = FastStreamSubmissionQueue(self.broker, self.job_queue)
         self.runner_client = httpx.AsyncClient(timeout=settings.http_timeout.total_seconds())
-        self.runner = Judge0CodeRunner(self.runner_client, settings)
+        self.runner = PistonCodeRunner(self.runner_client, settings)
         self.relay_task: asyncio.Task[None] | None = None
         self.app = FastStream(self.broker)
 

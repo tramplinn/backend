@@ -63,7 +63,7 @@ make down                # остановить локальные сервис�
 - `JWT_*`, `GITHUB_*`, `YANDEX_*`
 - `S3_*`, `ASSET_MAX_BYTES`
 - `LLM_*`
-- `JUDGE0_*`, `ALGORITHM_*`
+- `PISTON_URL`, `ALGORITHM_*`
 
 Если `LLM_MODEL` или `LLM_API_KEY` пусты, AI-ассистент отключён. Длительности
 принимаются в секундах или ISO 8601 (`900`, `PT15M`, `P30D`).
@@ -74,7 +74,7 @@ make down                # остановить локальные сервис�
 src/tramplin/
   api/             HTTP-роутеры и схемы
   services/        бизнес-логика и порты
-  infrastructure/  PostgreSQL, Redis, S3, OAuth, LLM и Judge0
+  infrastructure/  PostgreSQL, Redis, S3, OAuth, LLM и Piston
   models/          SQLAlchemy-модели
   core/            конфигурация, DI и безопасность
   main.py          FastAPI application factory
@@ -102,7 +102,7 @@ Redis и MinIO. Полный набор вместе с API и worker:
 docker compose -f dev.docker-compose.yml --profile full up --build
 ```
 
-RabbitMQ и Judge0 предоставляет соседний репозиторий `infra` через общую сеть
+RabbitMQ и Piston предоставляет соседний репозиторий `infra` через общую сеть
 `tramplin-edge`.
 
 Staging/production используют [`docker-compose.yml`](docker-compose.yml):
@@ -117,7 +117,7 @@ Compose поднимает PostgreSQL и Redis, запускает однора�
 worker и ждёт их healthchecks. `make staging-down` останавливает контейнеры, но
 сохраняет volumes.
 
-Cloud S3 bucket, DNS, TLS, backups, RabbitMQ, Judge0 и сеть `tramplin-edge`
+Cloud S3 bucket, DNS, TLS, backups, RabbitMQ, Piston и сеть `tramplin-edge`
 подготавливаются отдельно.
 
 ## CI/CD

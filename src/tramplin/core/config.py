@@ -93,8 +93,7 @@ class Settings(DatabaseSettings):
     s3_public_url: str | None = None
     asset_max_bytes: int = 10 * 1024 * 1024
 
-    judge0_url: str = "http://localhost:2358"
-    judge0_auth_token: SecretStr = SecretStr("")
+    piston_url: str = "http://localhost:2000"
     algorithm_source_max_bytes: int = 100 * 1024
     algorithm_output_max_bytes: int = 64 * 1024
     algorithm_runs_per_hour: int = 60

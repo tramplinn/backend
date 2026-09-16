@@ -17,9 +17,9 @@ from tramplin.infrastructure.email_code_store import EmailCodeStore
 from tramplin.infrastructure.email_renderer import EmailRenderer
 from tramplin.infrastructure.github import GitHubOAuthClient
 from tramplin.infrastructure.gitlab import GitLabOAuthClient
-from tramplin.infrastructure.judge0 import Judge0CodeRunner
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
+from tramplin.infrastructure.piston import PistonCodeRunner
 from tramplin.infrastructure.s3_storage import S3Storage
 from tramplin.infrastructure.tutor_quota import TutorQuota
 from tramplin.infrastructure.yandex import YandexOAuthClient
@@ -112,7 +112,7 @@ class AppProvider(Provider):
 
     @provide
     def code_runner(self, client: httpx.AsyncClient, settings: Settings) -> CodeRunner:
-        return Judge0CodeRunner(client, settings)
+        return PistonCodeRunner(client, settings)
 
     @provide
     async def storage(self, settings: Settings) -> AsyncIterator[S3Storage]:
