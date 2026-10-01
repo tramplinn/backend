@@ -13,6 +13,7 @@ from tramplin.api.v1 import (
     quizzes,
     tags_authoring,
     teacher_assistant,
+    track_plans,
     tracks,
 )
 
@@ -26,6 +27,7 @@ router.include_router(news_authoring.router)
 router.include_router(algorithm_authoring.router)
 router.include_router(algorithm_plans.router)
 router.include_router(course_plans.router)
+router.include_router(track_plans.router)
 router.include_router(teacher_assistant.router)
 router.include_router(tags_authoring.router)
 

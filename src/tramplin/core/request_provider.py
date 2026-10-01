@@ -65,6 +65,7 @@ from tramplin.services.recommendations import RecommendationService
 from tramplin.services.session import SessionService
 from tramplin.services.tags import TagService
 from tramplin.services.teacher_assistant import TeacherAssistantService
+from tramplin.services.track_plans import TrackPlanService
 from tramplin.services.tracks import TrackService
 from tramplin.services.tutor import TutorService
 from tramplin.services.users import UserService
@@ -152,6 +153,15 @@ class RequestProvider(Provider):
         tags: TagRepository,
     ) -> AlgorithmPlanService:
         return AlgorithmPlanService(session, algorithms, tags)
+
+    @provide
+    def track_plan_service(
+        self,
+        session: AsyncSession,
+        tracks: TrackRepository,
+        courses: CourseRepository,
+    ) -> TrackPlanService:
+        return TrackPlanService(session, tracks, courses)
 
     @provide
     def mcp_oauth_service(

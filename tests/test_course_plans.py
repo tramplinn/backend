@@ -4,12 +4,12 @@ import pytest
 import uuid_utils.compat as uuid
 
 from tests.fakes import FakeSession
-from tramplin.api.schemas.course_plans import CoursePlanApply
-from tramplin.core.errors import InvalidQuizError, NotFoundError
+from tramplin.api.schemas.course_plans import CoursePlanApply, CoursePlanPracticeSet
+from tramplin.core.errors import InvalidPlanError, NotFoundError
 from tramplin.models.algorithms import AlgorithmProblem, PracticeSet, PracticeSetProblem
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, Lesson, Module, ModuleItem
-from tramplin.models.enums import AlgorithmDifficulty, AssetMime
+from tramplin.models.enums import AlgorithmDifficulty, AssetMime, ContentStatus
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.services.course_plans import CoursePlanService
 
@@ -273,7 +273,7 @@ async def test_apply_creates_and_updates_a_practice_set() -> None:
 
     course, created = await service.apply(plan, actor_id)
 
-    assert created.created == 4  # course, module, practice set, set problem
+    assert created.created == 3  # course, module, practice set (with its problems)
     assert len(algorithms.sets) == 1
     practice_set = algorithms.sets[0]
     assert practice_set.title == "Разминка"
@@ -314,14 +314,19 @@ async def test_apply_creates_and_updates_a_practice_set() -> None:
     assert updated.unchanged >= 1  # the already-present set problem is left as-is
 
 
+def issue_codes(error: pytest.ExceptionInfo[InvalidPlanError]) -> set[str]:
+    return {issue["code"] for issue in error.value.details["issues"]}
+
+
 async def test_apply_rejects_cross_module_lesson_link() -> None:
     service, transaction, *_ = make_service()
     plan = course_plan()
     plan.modules[0].quizzes[0].lesson_slug = "missing"
 
-    with pytest.raises(InvalidQuizError):
+    with pytest.raises(InvalidPlanError) as error:
         await service.apply(plan, uuid.uuid7())
 
+    assert issue_codes(error) == {"unknown_lesson"}
     assert transaction.commits == 0
 
 
@@ -331,9 +336,146 @@ async def test_apply_rejects_duplicate_and_missing_attachments() -> None:
     duplicate = course_plan()
     duplicate.modules[0].quizzes[0].questions[0].attachment_ids = [asset_id, asset_id]
 
-    with pytest.raises(InvalidQuizError):
+    with pytest.raises(InvalidPlanError) as error:
         await service.apply(duplicate, uuid.uuid7())
+    assert issue_codes(error) == {"duplicate_attachment", "unknown_attachment"}
 
     missing = course_plan(asset_id)
-    with pytest.raises(NotFoundError):
+    with pytest.raises(InvalidPlanError) as error:
         await service.apply(missing, uuid.uuid7())
+    assert issue_codes(error) == {"unknown_attachment"}
+
+
+async def test_preview_reports_exact_changes_without_commit() -> None:
+    service, transaction, *_ = make_service()
+
+    report = await service.preview(course_plan(), uuid.uuid7())
+
+    assert transaction.commits == 0
+    assert report.valid
+    assert [(change.action, change.kind, change.path) for change in report.changes] == [
+        ("create", "course", "python"),
+        ("create", "module", "python/basics"),
+        ("create", "lesson", "python/basics/intro"),
+        ("create", "quiz", "python/basics/check"),
+        ("create", "question", "python/basics/check/questions/0"),
+    ]
+    assert all(change.entity_id is not None for change in report.changes)
+
+
+async def test_preview_collects_all_issues_and_skips_diff() -> None:
+    service, transaction, *_ = make_service()
+    plan = course_plan()
+    plan.modules[0].lessons[0].body_md = ":::interview\nбез ответа\n:::"
+    plan.modules[0].quizzes[0].questions[0].answer = {}
+    plan.modules[0].practice_sets = [
+        CoursePlanPracticeSet(title="Разминка", problem_slugs=["missing"])
+    ]
+
+    report = await service.preview(plan, uuid.uuid7())
+
+    assert not report.valid
+    assert report.changes == []
+    assert {(issue.severity, issue.code) for issue in report.issues} == {
+        ("error", "invalid_markdown"),
+        ("error", "invalid_question"),
+        ("error", "unknown_problem"),
+    }
+    assert transaction.commits == 0
+
+
+async def test_update_reports_changed_fields_and_unpublish_warning() -> None:
+    service, _, _, modules, lessons, quizzes, _ = make_service()
+    actor_id = uuid.uuid7()
+    course, _ = await service.apply(course_plan(), actor_id)
+    course.status = ContentStatus.PUBLISHED
+    wire_course(course, modules, lessons, quizzes)
+    plan = course_plan()
+    plan.modules[0].lessons[0].title = "Новое введение"
+
+    report = await service.preview(plan, actor_id)
+
+    by_path = {change.path: change for change in report.changes}
+    assert by_path["python"].fields == ["status"]
+    assert by_path["python/basics/intro"].fields == ["title"]
+    assert by_path["python/basics/check"].action == "unchanged"
+    assert any("черновиком" in warning for warning in report.warnings)
+
+
+async def test_content_order_change_is_reported_on_module() -> None:
+    service, _, _, modules, lessons, quizzes, _ = make_service()
+    actor_id = uuid.uuid7()
+    course, _ = await service.apply(course_plan(), actor_id)
+    wire_course(course, modules, lessons, quizzes)
+    plan = course_plan()
+    plan.modules[0].content_order = ["check", "intro"]
+
+    _, report = await service.apply(plan, actor_id)
+
+    module_change = next(change for change in report.changes if change.kind == "module")
+    assert module_change.action == "update"
+    assert module_change.fields == ["content_order"]
+
+
+async def test_apply_practice_set_leaves_rest_of_course_untouched() -> None:
+    problem = AlgorithmProblem(slug="two-sum", title="Two Sum", difficulty=AlgorithmDifficulty.EASY)
+    service, transaction, _, modules, lessons, quizzes, algorithms = make_service(
+        problems=[problem]
+    )
+    actor_id = uuid.uuid7()
+    plan = course_plan()
+    plan.modules.append(
+        CoursePlanApply.model_validate(
+            {
+                "title": "x",
+                "slug": "x",
+                "modules": [
+                    {
+                        "title": "Продвинутое",
+                        "slug": "advanced",
+                        "lessons": [{"title": "Глубже", "slug": "deep", "body_md": "# Глубже"}],
+                    }
+                ],
+            }
+        ).modules[0]
+    )
+    course, _ = await service.apply(plan, actor_id)
+    course.status = ContentStatus.PUBLISHED
+    wire_course(course, modules, lessons, quizzes)
+    basics, advanced = course.modules
+    items_before = list(advanced.items)
+
+    report = await service.apply_practice_set(
+        "python",
+        "advanced",
+        CoursePlanPracticeSet(title="Разминка", problem_slugs=["two-sum"]),
+        actor_id,
+    )
+
+    assert [(change.action, change.kind) for change in report.changes] == [("create", "practice")]
+    assert (basics.position, advanced.position) == (0, 1)
+    assert advanced.items[: len(items_before)] == items_before
+    assert advanced.items[-1].practice_set_id == algorithms.sets[0].id
+    assert course.status == ContentStatus.PUBLISHED
+    assert transaction.commits == 2
+
+
+async def test_apply_practice_set_requires_existing_module() -> None:
+    service, *_ = make_service()
+
+    with pytest.raises(NotFoundError):
+        await service.apply_practice_set(
+            "python", "basics", CoursePlanPracticeSet(title="Разминка"), uuid.uuid7()
+        )
+
+
+def wire_course(
+    course: Course, modules: ModuleRepo, lessons: LessonRepo, quizzes: QuizRepo
+) -> None:
+    """Fakes don't load relationships: link what a real repository would eager-load."""
+    course.modules = modules.modules
+    for module in modules.modules:
+        module.items = [item for item in modules.items if item.module_id == module.id]
+        for item in module.items:
+            item.lesson = next((x for x in lessons.lessons if x.id == item.lesson_id), None)
+            item.quiz = next((x for x in quizzes.quizzes if x.id == item.quiz_id), None)

@@ -116,7 +116,9 @@ async def test_course_plan_with_unknown_problem(client: httpx.AsyncClient, teach
         "/authoring/course-plans/apply", json=course_plan(), headers=teacher.headers
     )
 
-    assert response.status_code in {404, 422}, response.text
+    assert_error(response, 422, "invalid_plan")
+    issues = response.json()["details"]["issues"]
+    assert [issue["code"] for issue in issues] == ["unknown_problem"]
 
 
 async def test_course_plan_validates_content_order(
@@ -130,6 +132,109 @@ async def test_course_plan_validates_content_order(
     )
 
     assert_error(response, 422, "validation_error")
+
+
+async def test_previews_do_not_write(client: httpx.AsyncClient, teacher: Actor) -> None:
+    h = teacher.headers
+
+    algorithms = await client.post(
+        "/authoring/algorithm-plans/preview", json=ALGORITHM_PLAN, headers=h
+    )
+    assert algorithms.status_code == 200, algorithms.text
+    assert algorithms.json()["valid"] is True
+    assert algorithms.json()["changes"][0]["action"] == "create"
+    missing = await client.get("/authoring/algorithms/problems/slug/two-sum", headers=h)
+    assert_error(missing, 404, "not_found")
+
+    course = await client.post("/authoring/course-plans/preview", json=course_plan(), headers=h)
+    assert course.status_code == 200, course.text
+    assert course.json()["valid"] is False
+    assert {issue["code"] for issue in course.json()["issues"]} == {"unknown_problem"}
+    assert course.json()["changes"] == []
+
+    index = await client.get("/authoring/courses/index", headers=h)
+    assert index.json() == {"items": [], "total": 0}
+
+
+async def test_practice_set_plan_touches_only_its_set(
+    client: httpx.AsyncClient, teacher: Actor
+) -> None:
+    h = teacher.headers
+    await client.post("/authoring/algorithm-plans/apply", json=ALGORITHM_PLAN, headers=h)
+    await client.post("/authoring/course-plans/apply", json=course_plan(), headers=h)
+    payload = {
+        "course_slug": "hash-practice",
+        "module_slug": "basics",
+        "practice_set": {"title": "Добивка", "problem_slugs": ["two-sum"]},
+    }
+
+    preview = await client.post(
+        "/authoring/course-plans/practice-set/preview", json=payload, headers=h
+    )
+    assert preview.status_code == 200, preview.text
+    assert [(c["action"], c["kind"]) for c in preview.json()["changes"]] == [("create", "practice")]
+
+    applied = await client.post(
+        "/authoring/course-plans/practice-set/apply", json=payload, headers=h
+    )
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["created"] == 1
+    tree = await client.get("/authoring/courses/hash-practice", headers=h)
+    items = tree.json()["modules"][0]["items"]
+    assert [item["kind"] for item in items] == ["lesson", "practice", "quiz", "practice"]
+
+    missing = await client.post(
+        "/authoring/course-plans/practice-set/apply",
+        json={**payload, "module_slug": "nope"},
+        headers=h,
+    )
+    assert_error(missing, 404, "not_found")
+
+
+async def test_track_plan_and_indexes(client: httpx.AsyncClient, teacher: Actor) -> None:
+    h = teacher.headers
+    await client.post("/authoring/algorithm-plans/apply", json=ALGORITHM_PLAN, headers=h)
+    await client.post("/authoring/course-plans/apply", json=course_plan(), headers=h)
+    plan = {"title": "Backend", "slug": "backend", "course_slugs": ["hash-practice"]}
+
+    preview = await client.post("/authoring/track-plans/preview", json=plan, headers=h)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["created"] == 2
+
+    applied = await client.post("/authoring/track-plans/apply", json=plan, headers=h)
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["track_slug"] == "backend"
+    again = await client.post("/authoring/track-plans/apply", json=plan, headers=h)
+    assert (again.json()["created"], again.json()["updated"]) == (0, 0)
+
+    unknown = await client.post(
+        "/authoring/track-plans/apply", json={**plan, "course_slugs": ["nope"]}, headers=h
+    )
+    assert_error(unknown, 422, "invalid_plan")
+
+    tracks = await client.get("/authoring/tracks/index", headers=h)
+    assert [item["slug"] for item in tracks.json()["items"]] == ["backend"]
+    courses = await client.get("/authoring/courses/index", headers=h)
+    assert courses.json()["items"][0]["status"] == "draft"
+    problems = await client.get("/authoring/algorithms/problems/index", headers=h)
+    assert problems.json()["items"][0]["difficulty"] == "easy"
+
+
+async def test_algorithm_plan_can_validate_templates(
+    client: httpx.AsyncClient, teacher: Actor
+) -> None:
+    response = await client.post(
+        "/authoring/algorithm-plans/apply",
+        params={"validate_templates": True},
+        json=ALGORITHM_PLAN,
+        headers=teacher.headers,
+    )
+
+    assert response.status_code == 200, response.text
+    validations = response.json()["template_validations"]
+    assert [(item["problem_slug"], item["language"]) for item in validations] == [
+        ("two-sum", "python")
+    ]
 
 
 async def test_plans_forbidden_for_student(client: httpx.AsyncClient, student: Actor) -> None:

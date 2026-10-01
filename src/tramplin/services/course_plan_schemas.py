@@ -87,3 +87,27 @@ class CoursePlanApply(ApiModel):
         if len(set(slugs)) != len(slugs):
             raise ValueError("module slug должен быть уникальным внутри курса")
         return self
+
+
+class PracticeSetPlanApply(ApiModel):
+    """Один набор практики в уже существующем модуле; остальной курс не затрагивается."""
+
+    course_slug: str = Field(pattern=SLUG_PATTERN, max_length=120)
+    module_slug: str = Field(pattern=SLUG_PATTERN, max_length=120)
+    practice_set: CoursePlanPracticeSet
+
+
+class TrackPlanApply(ApiModel):
+    """Желаемое состояние трека: метаданные и курсы (по slug) в порядке показа."""
+
+    title: str = Field(min_length=1, max_length=200)
+    slug: str = Field(pattern=SLUG_PATTERN, max_length=120)
+    description: str | None = None
+    color: str | None = Field(default=None, max_length=16)
+    course_slugs: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique_course_slugs(self) -> Self:
+        if len(set(self.course_slugs)) != len(self.course_slugs):
+            raise ValueError("course_slugs не должны повторяться")
+        return self

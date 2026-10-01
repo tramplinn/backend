@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import Counter
 
 import uuid_utils.compat as uuid
 from anyio import to_thread
 
-from tramplin.core.errors import InvalidQuizError, NotFoundError
+from tramplin.core.errors import InvalidLessonContentError, InvalidQuizError, NotFoundError
 from tramplin.models.algorithms import PracticeSet, PracticeSetProblem
 from tramplin.models.assets import Asset
 from tramplin.models.content import Course, InterviewCard, Lesson, Module, ModuleItem
@@ -17,25 +17,26 @@ from tramplin.services.contracts import Transaction
 from tramplin.services.course_plan_schemas import (
     CoursePlanApply,
     CoursePlanModule,
+    CoursePlanPracticeSet,
     CoursePlanQuestion,
 )
 from tramplin.services.courses import CourseRepositoryPort
-from tramplin.services.entity_updates import mark_created, mark_updated, require
+from tramplin.services.entity_updates import require
 from tramplin.services.lesson_markdown import render_lesson_content
 from tramplin.services.lessons import LessonRepositoryPort
 from tramplin.services.modules import ModuleRepositoryPort
+from tramplin.services.plan_report import PlanChange, PlanReport
 from tramplin.services.quizzes import QuizRepositoryPort, validate_question
 
-
-@dataclass(slots=True)
-class ApplyStats:
-    created: int = 0
-    updated: int = 0
-    unchanged: int = 0
+ADDITIVE_WARNING = "Additive-only: сущности вне плана сохраняются и уходят в конец списка."
 
 
 class CoursePlanService:
-    """Применяет весь план одной транзакцией; ошибка откатывает план целиком."""
+    """Применяет весь план одной транзакцией; ошибка откатывает план целиком.
+
+    preview прогоняет тот же код без commit: сессия запроса откатывает его при закрытии,
+    поэтому diff предпросмотра совпадает с тем, что сделает apply.
+    """
 
     def __init__(
         self,
@@ -55,8 +56,151 @@ class CoursePlanService:
         self._assets = assets
         self._algorithms = algorithms
 
-    async def apply(self, plan: CoursePlanApply, actor_id: uuid.UUID) -> tuple[Course, ApplyStats]:
-        stats = ApplyStats()
+    async def validate(self, plan: CoursePlanApply) -> PlanReport:
+        report = PlanReport()
+        for module_plan in plan.modules:
+            await self._validate_module(f"{plan.slug}/{module_plan.slug}", module_plan, report)
+        return report
+
+    async def preview(self, plan: CoursePlanApply, actor_id: uuid.UUID) -> PlanReport:
+        report = await self.validate(plan)
+        if report.valid:
+            await self._apply(plan, actor_id, report)
+            await self._transaction.flush()
+        return report
+
+    async def apply(self, plan: CoursePlanApply, actor_id: uuid.UUID) -> tuple[Course, PlanReport]:
+        report = await self.validate(plan)
+        report.raise_if_invalid()
+        course = await self._apply(plan, actor_id, report)
+        await self._transaction.commit()
+        return course, report
+
+    async def preview_practice_set(
+        self,
+        course_slug: str,
+        module_slug: str,
+        plan: CoursePlanPracticeSet,
+        actor_id: uuid.UUID,
+    ) -> PlanReport:
+        module = await self._target_module(course_slug, module_slug)
+        path = f"{course_slug}/{module_slug}/practice/{plan.title}"
+        report = PlanReport()
+        await self._validate_practice_set(path, plan, report)
+        if report.valid:
+            await self._apply_practice_set(module, path, plan, actor_id, report)
+            await self._transaction.flush()
+        return report
+
+    async def apply_practice_set(
+        self,
+        course_slug: str,
+        module_slug: str,
+        plan: CoursePlanPracticeSet,
+        actor_id: uuid.UUID,
+    ) -> PlanReport:
+        """Создаёт/обновляет один набор практики, не трогая остальной курс и порядок модуля."""
+        module = await self._target_module(course_slug, module_slug)
+        path = f"{course_slug}/{module_slug}/practice/{plan.title}"
+        report = PlanReport()
+        await self._validate_practice_set(path, plan, report)
+        report.raise_if_invalid()
+        await self._apply_practice_set(module, path, plan, actor_id, report)
+        await self._transaction.commit()
+        return report
+
+    async def _target_module(self, course_slug: str, module_slug: str) -> Module:
+        course = require(
+            await self._courses.get_by_slug(course_slug, published_only=False),
+            NotFoundError(f"Курс '{course_slug}' не найден", slug=course_slug),
+        )
+        return require(
+            next((module for module in course.modules if module.slug == module_slug), None),
+            NotFoundError(
+                f"Модуль '{module_slug}' не найден в курсе '{course_slug}'", slug=module_slug
+            ),
+        )
+
+    async def _validate_module(self, path: str, plan: CoursePlanModule, report: PlanReport) -> None:
+        lesson_slugs = {lesson.slug for lesson in plan.lessons}
+        for lesson_plan in plan.lessons:
+            lesson_path = f"{path}/{lesson_plan.slug}"
+            if not lesson_plan.body_md.strip():
+                report.warning(lesson_path, "empty_lesson", "Пустой урок")
+                continue
+            try:
+                await to_thread.run_sync(render_lesson_content, lesson_plan.body_md)
+            except InvalidLessonContentError as error:
+                line = error.details.get("line")
+                suffix = f" (строка {line})" if line is not None else ""
+                report.error(lesson_path, "invalid_markdown", f"{error.message}{suffix}")
+
+        for quiz_plan in plan.quizzes:
+            quiz_path = f"{path}/{quiz_plan.slug}"
+            if quiz_plan.lesson_slug and quiz_plan.lesson_slug not in lesson_slugs:
+                report.error(
+                    quiz_path,
+                    "unknown_lesson",
+                    f"lesson_slug '{quiz_plan.lesson_slug}' должен ссылаться на урок "
+                    "из того же модуля этого плана",
+                )
+            if not quiz_plan.questions:
+                report.warning(quiz_path, "empty_quiz", "Тест без вопросов")
+            positions = Counter(question.position for question in quiz_plan.questions)
+            for position, count in positions.items():
+                if count > 1:
+                    report.error(
+                        f"{quiz_path}/questions/{position}",
+                        "duplicate_question_position",
+                        "position вопроса должен быть уникальным внутри теста",
+                    )
+            for question in quiz_plan.questions:
+                await self._validate_question(
+                    f"{quiz_path}/questions/{question.position}", question, report
+                )
+
+        for practice_plan in plan.practice_sets:
+            await self._validate_practice_set(
+                f"{path}/practice/{practice_plan.title}", practice_plan, report
+            )
+
+    async def _validate_question(
+        self, path: str, plan: CoursePlanQuestion, report: PlanReport
+    ) -> None:
+        try:
+            validate_question(QuestionType(plan.type), plan.options, plan.answer)
+        except InvalidQuizError as error:
+            report.error(path, "invalid_question", error.message)
+        if len(plan.attachment_ids) != len(set(plan.attachment_ids)):
+            report.error(path, "duplicate_attachment", "Прикреплённые файлы не должны повторяться")
+        for asset_id in dict.fromkeys(plan.attachment_ids):
+            if await self._assets.get(asset_id) is None:
+                report.error(path, "unknown_attachment", f"Прикреплённый файл {asset_id} не найден")
+
+    async def _validate_practice_set(
+        self, path: str, plan: CoursePlanPracticeSet, report: PlanReport
+    ) -> None:
+        if not plan.problem_slugs:
+            report.warning(path, "empty_practice_set", "Набор практики без задач")
+        if len(plan.problem_slugs) != len(set(plan.problem_slugs)):
+            report.error(path, "duplicate_problem", "Задача не может повторяться в наборе")
+        if plan.mode == "mock_interview" and plan.duration_minutes is None:
+            report.warning(
+                path,
+                "missing_duration",
+                "Для mock_interview нужен duration_minutes, иначе набор не опубликовать",
+            )
+        for slug in dict.fromkeys(plan.problem_slugs):
+            if await self._algorithms.get_problem_by_slug(slug) is None:
+                report.error(
+                    path,
+                    "unknown_problem",
+                    f"Задачи '{slug}' нет в банке: создайте её через план банка задач",
+                )
+
+    async def _apply(
+        self, plan: CoursePlanApply, actor_id: uuid.UUID, report: PlanReport
+    ) -> Course:
         course = await self._courses.get_by_slug(plan.slug, published_only=False)
         if course is None:
             course = Course(
@@ -69,11 +213,13 @@ class CoursePlanService:
                 status=ContentStatus.DRAFT,
             )
             course.modules = []
-            mark_created(course, actor_id)
+            report.create("course", plan.slug, course, actor_id)
             self._courses.add(course)
-            stats.created += 1
         else:
-            self._update(
+            report.warnings.append(ADDITIVE_WARNING)
+            report.update(
+                "course",
+                plan.slug,
                 course,
                 {
                     "title": plan.title,
@@ -83,7 +229,6 @@ class CoursePlanService:
                     "status": ContentStatus.DRAFT,
                 },
                 actor_id,
-                stats,
             )
 
         modules = {module.slug: module for module in course.modules}
@@ -105,6 +250,7 @@ class CoursePlanService:
 
         desired_modules: list[Module] = []
         for position, module_plan in enumerate(plan.modules):
+            path = f"{plan.slug}/{module_plan.slug}"
             module = modules.get(module_plan.slug)
             if module is None:
                 module = Module(
@@ -116,11 +262,12 @@ class CoursePlanService:
                     status=ContentStatus.DRAFT,
                 )
                 module.items = []
-                mark_created(module, actor_id)
+                change = report.create("module", path, module, actor_id)
                 self._modules.add(module)
-                stats.created += 1
             else:
-                self._update(
+                change = report.update(
+                    "module",
+                    path,
                     module,
                     {
                         "title": module_plan.title,
@@ -129,26 +276,25 @@ class CoursePlanService:
                         "status": ContentStatus.DRAFT,
                     },
                     actor_id,
-                    stats,
                 )
             desired_modules.append(module)
-            await self._apply_module(module, module_plan, actor_id, stats)
+            await self._apply_module(module, path, module_plan, change, actor_id, report)
 
         ordered_modules = [*desired_modules, *preserved_modules]
         for position, module in enumerate(ordered_modules):
             module.position = position
-        await self._transaction.commit()
-        return course, stats
+        return course
 
     async def _apply_module(
         self,
         module: Module,
+        path: str,
         plan: CoursePlanModule,
+        change: PlanChange,
         actor_id: uuid.UUID,
-        stats: ApplyStats,
+        report: PlanReport,
     ) -> None:
-        lesson_plans = plan.lessons
-        quiz_plans = plan.quizzes
+        order_before = [item.id for item in sorted(module.items, key=lambda item: item.position)]
         existing_lessons = {
             item.lesson.slug: item.lesson for item in module.items if item.lesson is not None
         }
@@ -157,7 +303,8 @@ class CoursePlanService:
         }
         lessons: dict[str, Lesson] = {}
         item_by_slug: dict[str, ModuleItem] = {}
-        for lesson_plan in lesson_plans:
+        for lesson_plan in plan.lessons:
+            lesson_path = f"{path}/{lesson_plan.slug}"
             lesson = existing_lessons.get(lesson_plan.slug)
             if lesson is None:
                 lesson = Lesson(
@@ -170,17 +317,18 @@ class CoursePlanService:
                     status=ContentStatus.DRAFT,
                 )
                 lesson.interview_cards = []
-                mark_created(lesson, actor_id)
+                report.create("lesson", lesson_path, lesson, actor_id)
                 self._lessons.add(lesson)
                 # ModuleItem.lesson — viewonly, ORM не строит по нему порядок flush: без явного
                 # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO lessons и
                 # упасть на fk_module_items_lesson_id_module_id_lessons.
                 await self._transaction.flush()
                 item = self._new_item(module, actor_id, lesson_id=lesson.id)
-                stats.created += 1
             else:
                 lesson = await self._lessons.get_with_interview_cards(lesson.id) or lesson
-                self._update(
+                report.update(
+                    "lesson",
+                    lesson_path,
                     lesson,
                     {
                         "title": lesson_plan.title,
@@ -189,17 +337,15 @@ class CoursePlanService:
                         "status": ContentStatus.DRAFT,
                     },
                     actor_id,
-                    stats,
                 )
                 item = next(item for item in module.items if item.lesson_id == lesson.id)
             await self._render_lesson(lesson, actor_id)
             lessons[lesson.slug] = lesson
             item_by_slug[lesson.slug] = item
 
-        for quiz_plan in quiz_plans:
+        for quiz_plan in plan.quizzes:
+            quiz_path = f"{path}/{quiz_plan.slug}"
             lesson = lessons.get(quiz_plan.lesson_slug or "")
-            if quiz_plan.lesson_slug and lesson is None:
-                raise InvalidQuizError("lesson_slug теста должен ссылаться на урок того же модуля")
             quiz = existing_quizzes.get(quiz_plan.slug)
             if quiz is None:
                 quiz = Quiz(
@@ -210,16 +356,17 @@ class CoursePlanService:
                     status=ContentStatus.DRAFT,
                 )
                 quiz.questions = []
-                mark_created(quiz, actor_id)
+                report.create("quiz", quiz_path, quiz, actor_id)
                 self._quizzes.add(quiz)
                 # ModuleItem.quiz — viewonly, ORM не строит по нему порядок flush: без явного
                 # flush тут INSERT INTO module_items мог уйти раньше INSERT INTO quizzes и
                 # упасть на fk_module_items_quiz_id_module_id_quizzes.
                 await self._transaction.flush()
                 item = self._new_item(module, actor_id, quiz_id=quiz.id)
-                stats.created += 1
             else:
-                self._update(
+                report.update(
+                    "quiz",
+                    quiz_path,
                     quiz,
                     {
                         "title": quiz_plan.title,
@@ -227,66 +374,19 @@ class CoursePlanService:
                         "status": ContentStatus.DRAFT,
                     },
                     actor_id,
-                    stats,
                 )
                 item = next(item for item in module.items if item.quiz_id == quiz.id)
-            await self._apply_questions(quiz, quiz_plan.questions, actor_id, stats)
+            await self._apply_questions(quiz, quiz_path, quiz_plan.questions, actor_id, report)
             item_by_slug[quiz.slug] = item
 
-        existing_practice_sets = {
-            item.practice_set.title: item.practice_set
-            for item in module.items
-            if item.practice_set is not None
-        }
         for practice_plan in plan.practice_sets:
-            problem_ids = [
-                require(
-                    await self._algorithms.get_problem_by_slug(slug),
-                    NotFoundError(f"Задача '{slug}' не найдена"),
-                ).id
-                for slug in practice_plan.problem_slugs
-            ]
-            practice_set = existing_practice_sets.get(practice_plan.title)
-            if practice_set is None:
-                practice_set = PracticeSet(
-                    title=practice_plan.title,
-                    description=practice_plan.description,
-                    mode=PracticeMode(practice_plan.mode),
-                    duration_minutes=practice_plan.duration_minutes,
-                    status=ContentStatus.DRAFT,
-                )
-                practice_set.problems = []
-                mark_created(practice_set, actor_id)
-                self._algorithms.add_set(practice_set)
-                # ModuleItem.practice_set — viewonly, ORM не строит по нему порядок flush: без
-                # явного flush тут INSERT INTO module_items мог уйти раньше INSERT INTO
-                # practice_sets и упасть на FK-ограничении.
-                await self._transaction.flush()
-                item = self._new_item(module, actor_id, practice_set_id=practice_set.id)
-                stats.created += 1
-            else:
-                loaded = await self._algorithms.get_set(practice_set.id, published_only=False)
-                practice_set = loaded or practice_set
-                self._update(
-                    practice_set,
-                    {
-                        "title": practice_plan.title,
-                        "description": practice_plan.description,
-                        "mode": PracticeMode(practice_plan.mode),
-                        "duration_minutes": practice_plan.duration_minutes,
-                    },
-                    actor_id,
-                    stats,
-                )
-                item = next(
-                    item for item in module.items if item.practice_set_id == practice_set.id
-                )
-            await self._apply_practice_problems(practice_set, problem_ids, actor_id, stats)
-            item_by_slug[practice_plan.title] = item
+            item_by_slug[practice_plan.title] = await self._apply_practice_set(
+                module, f"{path}/practice/{practice_plan.title}", practice_plan, actor_id, report
+            )
 
         desired_slugs = plan.content_order or [
             *lessons,
-            *(quiz.slug for quiz in quiz_plans),
+            *(quiz.slug for quiz in plan.quizzes),
             *(practice.title for practice in plan.practice_sets),
         ]
         desired_items = [item_by_slug[slug] for slug in desired_slugs]
@@ -296,24 +396,86 @@ class CoursePlanService:
         for position, item in enumerate(ordered_items):
             item.position = position
             item.updated_by = actor_id
+        existing_ids = set(order_before)
+        if [item.id for item in ordered_items if item.id in existing_ids] != order_before:
+            change.touch("content_order")
+
+    async def _apply_practice_set(
+        self,
+        module: Module,
+        path: str,
+        plan: CoursePlanPracticeSet,
+        actor_id: uuid.UUID,
+        report: PlanReport,
+    ) -> ModuleItem:
+        problem_ids = [
+            require(
+                await self._algorithms.get_problem_by_slug(slug),
+                NotFoundError(f"Задача '{slug}' не найдена"),
+            ).id
+            for slug in plan.problem_slugs
+        ]
+        existing = next(
+            (
+                item.practice_set
+                for item in module.items
+                if item.practice_set is not None and item.practice_set.title == plan.title
+            ),
+            None,
+        )
+        if existing is None:
+            practice_set = PracticeSet(
+                title=plan.title,
+                description=plan.description,
+                mode=PracticeMode(plan.mode),
+                duration_minutes=plan.duration_minutes,
+                status=ContentStatus.DRAFT,
+            )
+            practice_set.problems = []
+            change = report.create("practice", path, practice_set, actor_id)
+            self._algorithms.add_set(practice_set)
+            # ModuleItem.practice_set — viewonly, ORM не строит по нему порядок flush: без
+            # явного flush тут INSERT INTO module_items мог уйти раньше INSERT INTO
+            # practice_sets и упасть на FK-ограничении.
+            await self._transaction.flush()
+            item = self._new_item(module, actor_id, practice_set_id=practice_set.id)
+        else:
+            loaded = await self._algorithms.get_set(existing.id, published_only=False)
+            practice_set = loaded or existing
+            change = report.update(
+                "practice",
+                path,
+                practice_set,
+                {
+                    "title": plan.title,
+                    "description": plan.description,
+                    "mode": PracticeMode(plan.mode),
+                    "duration_minutes": plan.duration_minutes,
+                },
+                actor_id,
+            )
+            item = next(item for item in module.items if item.practice_set_id == practice_set.id)
+        if await self._apply_practice_problems(practice_set, problem_ids, actor_id):
+            change.touch("problem_slugs")
+        return item
 
     async def _apply_questions(
         self,
         quiz: Quiz,
+        path: str,
         plans: list[CoursePlanQuestion],
         actor_id: uuid.UUID,
-        stats: ApplyStats,
+        report: PlanReport,
     ) -> None:
         existing = {question.position: question for question in quiz.questions}
         for plan in plans:
-            question_type = QuestionType(plan.type)
-            validate_question(question_type, plan.options, plan.answer)
+            question_path = f"{path}/questions/{plan.position}"
             attachments = await self._assets_for(plan.attachment_ids)
             question = existing.get(plan.position)
-            values = {
+            values: dict[str, object] = {
                 "position": plan.position,
                 "prompt_md": plan.prompt_md,
-                "type": question_type,
+                "type": QuestionType(plan.type),
                 "options_json": plan.options,
                 "answer_json": plan.answer,
                 "explain_md": plan.explain_md,
@@ -321,21 +483,23 @@ class CoursePlanService:
             if question is None:
                 question = QuizQuestion(quiz_id=quiz.id, **values)
                 question.attachments = attachments
-                mark_created(question, actor_id)
+                report.create("question", question_path, question, actor_id)
                 self._quizzes.add_question(question)
                 quiz.questions.append(question)
-                stats.created += 1
             else:
                 values["attachments"] = attachments
-                self._update(question, values, actor_id, stats)
+                report.update("question", question_path, question, values, actor_id)
 
     async def _apply_practice_problems(
         self,
         practice_set: PracticeSet,
         problem_ids: list[uuid.UUID],
         actor_id: uuid.UUID,
-        stats: ApplyStats,
-    ) -> None:
+    ) -> bool:
+        """Возвращает True, если состав или порядок задач набора изменился."""
+        order_before = [
+            item.problem_id for item in sorted(practice_set.problems, key=lambda i: i.position)
+        ]
         existing = {item.problem_id: item for item in practice_set.problems}
         desired_ids = set(problem_ids)
         preserved = [item for item in practice_set.problems if item.problem_id not in desired_ids]
@@ -355,17 +519,16 @@ class CoursePlanService:
                     problem_id=problem_id,
                     position=len(desired_items),
                     recommended_minutes=None,
+                    created_by=actor_id,
                 )
-                mark_created(found, actor_id)
                 self._algorithms.add_set_problem(found)
                 practice_set.problems.append(found)
-                stats.created += 1
-            else:
-                stats.unchanged += 1
             desired_items.append(found)
-        for position, item in enumerate([*desired_items, *preserved]):
+        ordered = [*desired_items, *preserved]
+        for position, item in enumerate(ordered):
             item.position = position
             item.updated_by = actor_id
+        return [item.problem_id for item in ordered] != order_before
 
     async def _render_lesson(self, lesson: Lesson, actor_id: uuid.UUID) -> None:
         rendered = await to_thread.run_sync(render_lesson_content, lesson.body_md)
@@ -414,21 +577,3 @@ class CoursePlanService:
         self._modules.add_item(item)
         module.items.append(item)
         return item
-
-    @staticmethod
-    def _update(
-        entity: Course | Module | Lesson | Quiz | QuizQuestion | PracticeSet,
-        values: dict[str, object],
-        actor_id: uuid.UUID,
-        stats: ApplyStats,
-    ) -> None:
-        changed = False
-        for field, value in values.items():
-            if getattr(entity, field) != value:
-                setattr(entity, field, value)
-                changed = True
-        if changed:
-            mark_updated(entity, actor_id)
-            stats.updated += 1
-        else:
-            stats.unchanged += 1

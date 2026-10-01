@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from tramplin.api.content_mapping import track_out
 from tramplin.api.dependencies import TeacherUser
+from tramplin.api.indexes import IndexItemOut, IndexOut, fetch_all
 from tramplin.api.schemas.pagination import PageOut
 from tramplin.api.schemas.publish_cascade import PublishReportOut
 from tramplin.api.schemas.tracks import TrackCoursesOrder, TrackCreate, TrackOut, TrackUpdate
@@ -37,6 +38,21 @@ async def list_tracks(
         limit=page.limit,
         offset=page.offset,
     )
+
+
+@router.get(
+    "/index",
+    summary="Индекс треков (автор)",
+    description="Все треки, включая черновики, одним ответом: id, slug, title, status.",
+)
+async def index_tracks(
+    _: TeacherUser,
+    tracks: FromDishka[TrackService],
+) -> IndexOut[IndexItemOut]:
+    items = await fetch_all(
+        lambda limit, offset: tracks.list(published_only=False, limit=limit, offset=offset)
+    )
+    return IndexOut(items=[IndexItemOut.model_validate(track) for track in items], total=len(items))
 
 
 @router.get(

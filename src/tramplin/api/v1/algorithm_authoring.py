@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from tramplin.api.algorithm_mapping import problem_author_out, set_out
 from tramplin.api.dependencies import TeacherUser
+from tramplin.api.indexes import IndexOut, ProblemIndexItemOut, fetch_all
 from tramplin.api.schemas.algorithms import (
     PracticeSetCreate,
     PracticeSetOut,
@@ -45,6 +46,22 @@ async def list_problems(
         total=page.total,
         limit=page.limit,
         offset=page.offset,
+    )
+
+
+@router.get(
+    "/algorithms/problems/index",
+    summary="Индекс задач (автор)",
+    description="Все задачи, включая черновики, одним ответом: id, slug, title, difficulty.",
+)
+async def index_problems(
+    _: TeacherUser,
+    service: FromDishka[AlgorithmAuthoringService],
+) -> IndexOut[ProblemIndexItemOut]:
+    items = await fetch_all(lambda limit, offset: service.list_problems(limit=limit, offset=offset))
+    return IndexOut(
+        items=[ProblemIndexItemOut.model_validate(problem) for problem in items],
+        total=len(items),
     )
 
 

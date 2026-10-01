@@ -129,3 +129,8 @@ class RunnerBusyError(ServiceUnavailableError):
     code = "runner_busy"
     message = "Дождитесь завершения предыдущего запуска"
     headers: ClassVar[dict[str, str] | None] = {"Retry-After": "2"}
+
+
+class InvalidPlanError(UnprocessableError):
+    code = "invalid_plan"
+    message = "План содержит ошибки: см. details.issues"

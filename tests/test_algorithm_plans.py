@@ -2,10 +2,12 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
+import pytest
 import uuid_utils.compat as uuid
 
 from tests.fakes import FakeSession
 from tramplin.api.schemas.algorithm_plans import AlgorithmPlanApply
+from tramplin.core.errors import InvalidPlanError
 from tramplin.models.algorithms import AlgorithmProblem, AlgorithmTemplate, AlgorithmTestCase
 from tramplin.models.tags import Tag
 from tramplin.services.algorithm_plans import AlgorithmPlanService
@@ -141,3 +143,64 @@ async def test_apply_invalidates_template_validation_on_case_change() -> None:
     await service.apply(AlgorithmPlanApply.model_validate(changed), uuid.uuid7())
 
     assert problem.templates[0].validated_at is None
+
+
+async def test_preview_reports_changes_without_commit() -> None:
+    service, transaction, _ = make_service()
+
+    report = await service.preview(AlgorithmPlanApply.model_validate(problem_plan()), uuid.uuid7())
+
+    assert transaction.commits == 0
+    assert [(change.action, change.path) for change in report.changes] == [
+        ("create", "two-sum"),
+        ("create", "two-sum/test-cases/0"),
+        ("create", "two-sum/test-cases/1"),
+        ("create", "two-sum/templates/python"),
+    ]
+    assert {issue.code for issue in report.issues} == {"missing_solution"}
+
+
+async def test_update_reports_changed_fields_and_tags() -> None:
+    service, _, _ = make_service()
+    await service.apply(AlgorithmPlanApply.model_validate(problem_plan()), uuid.uuid7())
+    changed = problem_plan()
+    changed["problems"][0]["statement_md"] = "Новое условие"
+    changed["problems"][0]["tags"] = ["hash"]
+
+    problems, report = await service.apply(AlgorithmPlanApply.model_validate(changed), uuid.uuid7())
+
+    assert report.changes[0].fields == ["statement_md", "tags"]
+    assert problems[0].statement_html.startswith("<p>Новое условие")
+
+
+async def test_invalid_plan_is_rejected_with_issue_codes() -> None:
+    service, transaction, _ = make_service()
+    plan = problem_plan()
+    plan["problems"][0]["provider"] = "external"
+    plan["problems"][0]["test_cases"][1]["position"] = 0
+    plan["problems"].append(dict(plan["problems"][0]))
+
+    report = service.validate(AlgorithmPlanApply.model_validate(plan))
+
+    assert {issue.code for issue in report.issues if issue.severity == "error"} == {
+        "duplicate_problem",
+        "missing_external_url",
+        "duplicate_test_case_position",
+    }
+    with pytest.raises(InvalidPlanError):
+        await service.apply(AlgorithmPlanApply.model_validate(plan), uuid.uuid7())
+    assert transaction.commits == 0
+
+
+async def test_solution_change_resets_template_validation() -> None:
+    service, _, _ = make_service()
+    problems, _ = await service.apply(
+        AlgorithmPlanApply.model_validate(problem_plan()), uuid.uuid7()
+    )
+    problems[0].templates[0].validated_at = datetime(2026, 1, 1, tzinfo=UTC)
+    changed = problem_plan()
+    changed["problems"][0]["templates"][0]["solution_code"] = "print(3)"
+
+    await service.apply(AlgorithmPlanApply.model_validate(changed), uuid.uuid7())
+
+    assert problems[0].templates[0].validated_at is None

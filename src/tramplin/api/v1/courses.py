@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from tramplin.api.content_mapping import course_out, course_tree_out
 from tramplin.api.dependencies import TeacherUser
+from tramplin.api.indexes import IndexItemOut, IndexOut, fetch_all
 from tramplin.api.schemas.courses import (
     CourseCreate,
     CourseOut,
@@ -40,6 +41,23 @@ async def list_courses(
         total=page.total,
         limit=page.limit,
         offset=page.offset,
+    )
+
+
+@router.get(
+    "/index",
+    summary="Индекс курсов (автор)",
+    description="Все курсы, включая черновики, одним ответом: id, slug, title, status.",
+)
+async def index_courses(
+    _: TeacherUser,
+    courses: FromDishka[CourseService],
+) -> IndexOut[IndexItemOut]:
+    items = await fetch_all(
+        lambda limit, offset: courses.list(published_only=False, limit=limit, offset=offset)
+    )
+    return IndexOut(
+        items=[IndexItemOut.model_validate(course) for course in items], total=len(items)
     )
 
 
