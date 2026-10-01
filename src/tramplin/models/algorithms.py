@@ -151,7 +151,7 @@ class PracticeSession(UUIDPrimaryKey):
 
     # NULL — свободная сессия тренажёра: задача решается вне набора практики.
     practice_set_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("practice_sets.id", ondelete="RESTRICT")
+        ForeignKey("practice_sets.id", ondelete="CASCADE")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     mode: Mapped[PracticeMode]
@@ -176,7 +176,7 @@ class AlgorithmSubmission(UUIDPrimaryKey):
         ForeignKey("practice_sessions.id", ondelete="CASCADE")
     )
     problem_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("algorithm_problems.id", ondelete="RESTRICT")
+        ForeignKey("algorithm_problems.id", ondelete="CASCADE")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     kind: Mapped[SubmissionKind]

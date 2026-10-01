@@ -182,6 +182,17 @@ async def test_student_solves_problem(
     profile = await client.get(f"/users/{student.login}")
     assert profile.json()["solved_algorithms"] == 1
 
+    # Задачу с решениями можно удалить: история по ней уходит каскадом.
+    removed = await client.delete(
+        f"/authoring/algorithms/problems/{problem_id}", headers=teacher.headers
+    )
+    assert removed.status_code == 204, removed.text
+    assert_error(
+        await client.get(f"/algorithms/submissions/{right.json()['id']}", headers=h),
+        404,
+        "not_found",
+    )
+
 
 async def test_foreign_session_and_submission_are_hidden(
     client: httpx.AsyncClient, teacher: Actor, student: Actor, make_user: Any
@@ -304,7 +315,12 @@ async def test_practice_sets(client: httpx.AsyncClient, teacher: Actor, student:
     assert "practice" in kinds
 
     in_use = await client.delete(f"/authoring/practice-sets/{practice['id']}", headers=h)
-    assert_error(in_use, 409, "conflict")
+    assert in_use.status_code == 204, in_use.text
+    assert_error(
+        await client.get(f"/practice-sessions/{session['id']}", headers=student.headers),
+        404,
+        "not_found",
+    )
 
     spare = await create(
         client,

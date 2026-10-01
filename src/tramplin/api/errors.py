@@ -30,14 +30,6 @@ CONFLICTS: Final[dict[str, Conflict]] = {
     "uq_modules_course_id_slug": Conflict("В этом курсе уже есть модуль с таким адресом", "slug"),
     "uq_courses_slug": Conflict("Курс с таким адресом уже существует", "slug"),
     "uq_tracks_slug": Conflict("Трек с таким адресом уже существует", "slug"),
-    # Это не про совпадение данных, а про RESTRICT: удаление блокируют
-    # зависимые записи, так что сообщение по умолчанию тут вводит в заблуждение.
-    "fk_algorithm_submissions_problem_id_algorithm_problems": Conflict(
-        "Нельзя удалить задачу: по ней уже есть отправленные решения", ""
-    ),
-    "fk_practice_sessions_practice_set_id_practice_sets": Conflict(
-        "Нельзя удалить набор практики: по нему уже есть сессии", ""
-    ),
 }
 
 HANDLED_EXCEPTIONS: Final = (

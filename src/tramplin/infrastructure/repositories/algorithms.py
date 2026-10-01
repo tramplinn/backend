@@ -135,7 +135,8 @@ class AlgorithmRepository(Repository):
         return problem
 
     async def delete_problem(self, problem: AlgorithmProblem) -> None:
-        # Тест-кейсы и шаблоны каскадно удаляются на уровне БД (FK ondelete="CASCADE").
+        # Тест-кейсы, шаблоны, решения и прогресс по задаче каскадно удаляются
+        # на уровне БД (FK ondelete="CASCADE").
         await self.delete(problem)
 
     async def get_test_case(self, case_id: uuid.UUID) -> AlgorithmTestCase | None:
@@ -180,7 +181,8 @@ class AlgorithmRepository(Repository):
         return practice_set
 
     async def delete_set(self, practice_set: PracticeSet) -> None:
-        # Задачи набора каскадно удаляются на уровне БД (FK ondelete="CASCADE").
+        # Задачи набора и сессии по нему (вместе с их решениями) каскадно удаляются
+        # на уровне БД (FK ondelete="CASCADE").
         await self.delete(practice_set)
 
     def add_set_problem(self, item: PracticeSetProblem) -> PracticeSetProblem:
