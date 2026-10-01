@@ -115,12 +115,8 @@ async def test_admin_lists_and_updates_users(
     assert (await client.get("/auth/me", headers=target.headers)).status_code == 403
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="БАГ: UserService.update молча игнорирует name и student_number из UserAdminUpdate",
-)
 async def test_admin_updates_name_and_student_number(
-    client: httpx.AsyncClient, admin: Actor, student: Actor
+    client: httpx.AsyncClient, admin: Actor, student: Actor, make_user: MakeUser
 ) -> None:
     response = await client.patch(
         f"/admin/users/{student.id}",
@@ -128,9 +124,26 @@ async def test_admin_updates_name_and_student_number(
         headers=admin.headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json()["name"] == "Иван Петров"
     assert response.json()["student_number"] == "S-001"
+    listing = await client.get("/admin/users", params={"q": student.login}, headers=admin.headers)
+    assert listing.json()["items"][0]["student_number"] == "S-001"
+
+    cleared = await client.patch(
+        f"/admin/users/{student.id}", json={"student_number": None}, headers=admin.headers
+    )
+    assert cleared.json()["student_number"] is None
+    assert cleared.json()["name"] == "Иван Петров"
+
+    other = await make_user()
+    await client.patch(
+        f"/admin/users/{other.id}", json={"student_number": "S-002"}, headers=admin.headers
+    )
+    duplicate = await client.patch(
+        f"/admin/users/{student.id}", json={"student_number": "S-002"}, headers=admin.headers
+    )
+    assert_error(duplicate, 409, "conflict")
 
 
 async def test_admin_cannot_demote_self(client: httpx.AsyncClient, admin: Actor) -> None:

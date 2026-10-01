@@ -222,6 +222,11 @@ class UserService:
             if changes["is_active"] is None:
                 raise ConflictError("Поле is_active не может быть null")
             user.is_active = changes["is_active"]
+        # Оба поля nullable: null — это очистка, а не ошибка.
+        if "name" in changes:
+            user.name = changes["name"]
+        if "student_number" in changes:
+            user.student_number = changes["student_number"]
         user.updated_by = actor_id
         await self._session.commit()
         return user
