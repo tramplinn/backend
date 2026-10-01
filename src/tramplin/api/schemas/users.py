@@ -10,6 +10,7 @@ from tramplin.models.enums import UserRole
 
 Specialty = Literal["frontend", "backend", "fullstack", "mobile", "data", "devops", "qa"]
 DeveloperGrade = Literal["learning", "junior", "middle", "senior"]
+Locale = Literal["ru", "en"]
 
 
 class UserAdminUpdate(ApiModel):
@@ -30,6 +31,7 @@ class UserProfileUpdate(ApiModel):
     university: str | None = Field(default=None, max_length=200)
     interests: list[str] | None = Field(default=None, max_length=20)
     resume_asset_id: uuid.UUID | None = None
+    preferred_locale: Locale | None = None
 
 
 class UserOut(ApiModel):
@@ -85,4 +87,5 @@ class PublicProfileOut(PublicUserOut):
 
 
 class MeOut(UserOut):
+    preferred_locale: Locale | None = None
     identities: list[IdentityOut] = Field(default_factory=list)

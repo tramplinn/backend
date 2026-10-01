@@ -35,6 +35,10 @@ class User(UUIDPrimaryKey):
             "experience_years >= 0 AND experience_years <= 80",
             name="experience_years_range",
         ),
+        CheckConstraint(
+            "preferred_locale IN ('ru', 'en')",
+            name="preferred_locale_allowed",
+        ),
     )
 
     login: Mapped[str] = mapped_column(String(64), unique=True)
@@ -47,6 +51,8 @@ class User(UUIDPrimaryKey):
     specialty: Mapped[str | None] = mapped_column(String(32))
     grade: Mapped[str | None] = mapped_column(String(16))
     experience_years: Mapped[int | None] = mapped_column(SmallInteger())
+    # NULL — пользователь язык не выбирал; клиент тогда берёт свой выбор или `ru`.
+    preferred_locale: Mapped[str | None] = mapped_column(String(8))
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("companies.id", ondelete="SET NULL")
     )

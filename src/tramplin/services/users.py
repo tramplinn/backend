@@ -17,7 +17,15 @@ from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import CourseActivity, PageResult, ProfileStats, Transaction
 from tramplin.services.entity_updates import require
 
-SIMPLE_PROFILE_FIELDS = {"name", "headline", "bio", "specialty", "grade", "experience_years"}
+SIMPLE_PROFILE_FIELDS = {
+    "name",
+    "headline",
+    "bio",
+    "specialty",
+    "grade",
+    "experience_years",
+    "preferred_locale",
+}
 type CourseActivities = list[CourseActivity]
 
 

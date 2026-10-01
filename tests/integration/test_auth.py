@@ -255,6 +255,32 @@ async def test_update_profile_validates_input(client: httpx.AsyncClient, student
     assert_error(response, 422, "validation_error")
 
 
+async def test_update_profile_stores_preferred_locale(
+    client: httpx.AsyncClient, student: Actor
+) -> None:
+    me = await client.get("/auth/me", headers=student.headers)
+    assert me.json()["preferred_locale"] is None
+
+    response = await client.patch(
+        "/auth/me", json={"preferred_locale": "en"}, headers=student.headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["preferred_locale"] == "en"
+    me = await client.get("/auth/me", headers=student.headers)
+    assert me.json()["preferred_locale"] == "en"
+
+
+async def test_update_profile_rejects_unknown_locale(
+    client: httpx.AsyncClient, student: Actor
+) -> None:
+    response = await client.patch(
+        "/auth/me", json={"preferred_locale": "de"}, headers=student.headers
+    )
+
+    assert_error(response, 422, "validation_error")
+
+
 @pytest.mark.parametrize("path", ["/companies", "/universities", "/interests"])
 async def test_directories(client: httpx.AsyncClient, student: Actor, path: str) -> None:
     await client.patch(
