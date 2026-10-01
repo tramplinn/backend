@@ -128,7 +128,7 @@ service используют один `API_IMAGE`.
 
 Нужные protected CI/CD variables:
 
-- `SERVER_IP`, `SSH_PRIVATE_KEY`
+- `SERVER_IP`, `SSH_PORT`, `SSH_USER`, `SSH_PRIVATE_KEY`
 - `STAGE_ENV`, `PROD_ENV` типа File
 - `STAGE_URL`, `PROD_URL`
 
@@ -138,6 +138,6 @@ service используют один `API_IMAGE`.
 
 ## Документация
 
-- [Продуктовые и архитектурные документы](artifacts/README.md)
-- [PRD алгоритмических сессий](artifacts/prd/algorithmic-sessions.md)
-- [Диаграмма базы](../db.drawio)
+- [Продуктовые спецификации](https://gitlab.com/tramplin1/specs) — бизнес-ценность,
+  продукты и пользовательские кейсы.
+- [PRD авторинга алгоритмических задач через MCP](https://gitlab.com/tramplin1/mcp-server/-/blob/main/docs/algorithm-authoring-prd.md)
