@@ -1,9 +1,7 @@
 """Пользователи, админка, обратная связь и загрузка файлов."""
 
 import httpx
-import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.integration.conftest import Actor, MakeUser
@@ -213,14 +211,6 @@ async def test_feedback_status_update_of_missing_item(
     assert_error(response, 404, "not_found")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingGreenlet,
-    reason=(
-        "БАГ: FeedbackService.set_status не обновляет объект после commit, а updated_at "
-        "с server_onupdate протухает — сериализация ответа падает с MissingGreenlet (500)"
-    ),
-)
 async def test_feedback_status_update(
     client: httpx.AsyncClient, student: Actor, admin: Actor
 ) -> None:
@@ -232,8 +222,14 @@ async def test_feedback_status_update(
         headers=admin.headers,
     )
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "resolved"
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "resolved"
+    assert body["updated_at"] >= body["created_at"]
+    resolved = await client.get(
+        "/admin/feedback", params={"status": "resolved"}, headers=admin.headers
+    )
+    assert [item["id"] for item in resolved.json()["items"]] == [body["id"]]
 
 
 async def test_feedback_rejects_foreign_attachment(

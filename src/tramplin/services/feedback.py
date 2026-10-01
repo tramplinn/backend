@@ -91,7 +91,9 @@ class FeedbackService:
         feedback.status = status
         mark_updated(feedback, actor_id)
         await self._transaction.commit()
-        return feedback
+        # updated_at выставляет БД (server_onupdate): после commit атрибут протух,
+        # а ленивую подгрузку при синхронной сериализации ответа asyncio не допускает.
+        return require(await self._feedback.get(feedback_id), NotFoundError("Обращение не найдено"))
 
     async def delete(self, feedback_id: uuid.UUID) -> None:
         feedback = require(
