@@ -1,7 +1,7 @@
 DEV_COMPOSE = docker compose -f dev.docker-compose.yml
 DEPLOY_COMPOSE = docker compose --env-file .env.runtime
 
-.PHONY: install up down migrate seed revision lint format typecheck test check run \
+.PHONY: install up down migrate seed revision lint format typecheck test test-integration check run \
 	staging-config staging-up staging-down
 
 install:
@@ -34,6 +34,10 @@ typecheck:
 
 test:
 	uv run pytest
+
+# Только интеграционные: TEST_DATABASE_URL или Docker для testcontainers.
+test-integration:
+	uv run pytest tests/integration --no-cov
 
 check: lint typecheck test
 

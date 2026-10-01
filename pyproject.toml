@@ -39,6 +39,8 @@ dev = [
     "pytest-cov>=7.1.0",
     "types-aioboto3[s3]>=15.5.0",
     "types-pygments>=2.21.0.20260819",
+    "testcontainers[postgres]>=4.15.0",
+    "fakeredis>=2.39.0",
 ]
 
 [build-system]
@@ -84,6 +86,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["integration: тест поднимает приложение поверх настоящей Postgres"]
 addopts = [
     "--cov=tramplin",
     "--cov-report=term-missing:skip-covered",

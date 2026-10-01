@@ -31,6 +31,15 @@ quality:
   stage: test
   needs: []
   image: ghcr.io/astral-sh/uv:0.12.1-python3.14-trixie-slim
+  # Интеграционные тесты (tests/integration) гоняются на настоящей Postgres с pgvector.
+  services:
+    - name: pgvector/pgvector:pg18
+      alias: postgres
+  variables:
+    POSTGRES_DB: tramplin_test
+    POSTGRES_USER: tramplin
+    POSTGRES_PASSWORD: tramplin
+    TEST_DATABASE_URL: "postgresql+asyncpg://tramplin:tramplin@postgres:5432/tramplin_test"
   cache:
     key:
       files:
