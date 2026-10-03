@@ -30,6 +30,10 @@ CONFLICTS: Final[dict[str, Conflict]] = {
     "uq_modules_course_id_slug": Conflict("В этом курсе уже есть модуль с таким адресом", "slug"),
     "uq_courses_slug": Conflict("Курс с таким адресом уже существует", "slug"),
     "uq_tracks_slug": Conflict("Трек с таким адресом уже существует", "slug"),
+    "uq_projects_slug": Conflict("Проект с таким адресом уже существует", "slug"),
+    "uq_project_invites_project_id_invitee_id_pending": Conflict(
+        "Приглашение этому пользователю уже отправлено", "login"
+    ),
 }
 
 HANDLED_EXCEPTIONS: Final = (

@@ -11,6 +11,7 @@ from tramplin.infrastructure.github import GitHubOAuthClient
 from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
+from tramplin.infrastructure.project_invite_quota import ProjectInviteQuota
 from tramplin.infrastructure.repositories import (
     AlgorithmRepository,
     AssetRepository,
@@ -24,6 +25,9 @@ from tramplin.infrastructure.repositories import (
     McpOAuthRepository,
     ModuleRepository,
     NewsRepository,
+    ProfileLayoutRepository,
+    ProjectInviteRepository,
+    ProjectRepository,
     QuizAttemptRepository,
     QuizRepository,
     RecommendationRepository,
@@ -57,7 +61,9 @@ from tramplin.services.mcp_oauth import McpOAuthService
 from tramplin.services.modules import ModuleService
 from tramplin.services.news import NewsService
 from tramplin.services.oauth_auth import OAuthAuthService, OAuthClientPort, OAuthRegistry
+from tramplin.services.profile_layout import ProfileLayoutService
 from tramplin.services.progress import ProgressService
+from tramplin.services.projects import ProjectService
 from tramplin.services.publish_cascade import PublishCascadeService
 from tramplin.services.quiz_attempts import QuizAttemptService
 from tramplin.services.quizzes import QuizService
@@ -104,6 +110,34 @@ class RequestProvider(Provider):
     companies = provide(CompanyRepository)
     universities = provide(UniversityRepository)
     interests = provide(InterestRepository)
+    projects = provide(ProjectRepository)
+    project_invites = provide(ProjectInviteRepository)
+    profile_layouts = provide(ProfileLayoutRepository)
+
+    @provide
+    def project_service(
+        self,
+        session: AsyncSession,
+        projects: ProjectRepository,
+        invites: ProjectInviteRepository,
+        users: UserRepository,
+        assets: AssetRepository,
+        email_jobs: EmailJobRepository,
+        renderer: EmailRenderer,
+        quota: ProjectInviteQuota,
+        settings: Settings,
+    ) -> ProjectService:
+        return ProjectService(
+            session, projects, invites, users, assets, email_jobs, renderer, quota, settings
+        )
+
+    @provide
+    def profile_layout_service(
+        self,
+        session: AsyncSession,
+        blocks: ProfileLayoutRepository,
+    ) -> ProfileLayoutService:
+        return ProfileLayoutService(session, blocks)
 
     @provide
     def session_service(

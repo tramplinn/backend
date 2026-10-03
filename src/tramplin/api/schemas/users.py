@@ -6,7 +6,8 @@ from pydantic import Field
 from tramplin.api.schemas.base import ApiModel
 from tramplin.api.schemas.directories import CompanyOut, InterestOut, UniversityOut
 from tramplin.api.schemas.identities import IdentityOut
-from tramplin.models.enums import UserRole
+from tramplin.api.schemas.projects import ProjectCardOut
+from tramplin.models.enums import ProfileBlock, UserRole
 
 Specialty = Literal["frontend", "backend", "fullstack", "mobile", "data", "devops", "qa"]
 DeveloperGrade = Literal["learning", "junior", "middle", "senior"]
@@ -78,12 +79,17 @@ class CourseActivityOut(ApiModel):
 
 
 class PublicProfileOut(PublicUserOut):
+    """Скрытые пользователем блоки не отдаются вовсе: их поля пусты, а в layout
+    перечислены только видимые блоки в выбранном порядке."""
+
     bio: str | None
-    completed_lessons: int
-    passed_quizzes: int
-    solved_algorithms: int
+    completed_lessons: int | None
+    passed_quizzes: int | None
+    solved_algorithms: int | None
     active_courses: list[CourseActivityOut] = Field(default_factory=list)
     resume_url: str | None = None
+    layout: list[ProfileBlock] = Field(default_factory=list)
+    projects: list[ProjectCardOut] = Field(default_factory=list)
 
 
 class MeOut(UserOut):

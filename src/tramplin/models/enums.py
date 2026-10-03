@@ -111,3 +111,55 @@ class EmailQueue(StrEnum):
 
     TRANSACTIONAL = "transactional"
     BULK = "bulk"
+
+
+class ProjectStatus(StrEnum):
+    """Переходы свободные; archived лишь запрещает правки до смены статуса."""
+
+    IDEA = "idea"
+    PLANNING = "planning"
+    IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
+    DONE = "done"
+    ARCHIVED = "archived"
+
+
+class ProjectVisibility(StrEnum):
+    PUBLIC = "public"
+    AUTHENTICATED = "authenticated"
+    PRIVATE = "private"
+
+
+class ProjectRole(StrEnum):
+    OWNER = "owner"
+    MAINTAINER = "maintainer"
+    CONTRIBUTOR = "contributor"
+    VIEWER = "viewer"
+
+
+class ProjectInviteStatus(StrEnum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+class ProjectLinkKind(StrEnum):
+    REPOSITORY = "repository"
+    DEMO = "demo"
+    DOCS = "docs"
+    DESIGN = "design"
+    VIDEO = "video"
+    PRESENTATION = "presentation"
+    OTHER = "other"
+
+
+class ProfileBlock(StrEnum):
+    """Новый блок — новое значение здесь и в DEFAULT_PROFILE_LAYOUT, без миграции данных."""
+
+    ABOUT = "about"
+    PROJECTS = "projects"
+    STATS = "stats"
+    COURSES = "courses"
+    RESUME = "resume"

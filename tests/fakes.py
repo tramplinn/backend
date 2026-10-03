@@ -6,8 +6,19 @@ import uuid_utils.compat as uuid
 from tramplin.core.errors import InvalidEmailCodeError, TooManyRequestsError
 from tramplin.models.assets import Asset
 from tramplin.models.directories import Company, Interest, University
-from tramplin.models.enums import IdentityProvider, UserRole
+from tramplin.models.enums import (
+    IdentityProvider,
+    ProjectInviteStatus,
+    ProjectVisibility,
+    UserRole,
+)
 from tramplin.models.notifications import EmailJobOutbox
+from tramplin.models.projects import (
+    Project,
+    ProjectInvite,
+    ProjectStatusEvent,
+    UserProfileBlock,
+)
 from tramplin.models.users import RefreshToken, User, UserIdentity
 from tramplin.services.contracts import (
     CourseActivity,
@@ -17,6 +28,7 @@ from tramplin.services.contracts import (
     RenderedEmail,
     StatePurpose,
 )
+from tramplin.services.projects import ProjectCatalogFilters
 
 type CourseActivities = list[CourseActivity]
 
@@ -279,3 +291,122 @@ class FakeStateStore:
 
     async def consume(self, token: str) -> OAuthState | None:
         return self.states.pop(token, None)
+
+
+class FakeProjectRepository:
+    """In-memory проекты: фильтры каталога проверяются отдельно на уровне SQL."""
+
+    def __init__(self) -> None:
+        self.projects: dict[uuid.UUID, Project] = {}
+        self.events: list[ProjectStatusEvent] = []
+        self.catalog_calls: list[tuple[ProjectCatalogFilters, list[ProjectVisibility]]] = []
+
+    async def catalog(
+        self,
+        filters: ProjectCatalogFilters,
+        *,
+        visibilities: Sequence[ProjectVisibility],
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Project], int]:
+        self.catalog_calls.append((filters, list(visibilities)))
+        items = [item for item in self.projects.values() if item.visibility in visibilities]
+        return items[offset : offset + limit], len(items)
+
+    async def list_for_member(self, user_id: uuid.UUID) -> list[Project]:
+        return [
+            project
+            for project in self.projects.values()
+            if any(member.user_id == user_id for member in project.members)
+        ]
+
+    async def get_by_slug(self, slug: str) -> Project | None:
+        return next((item for item in self.projects.values() if item.slug == slug), None)
+
+    async def slug_exists(self, slug: str) -> bool:
+        return await self.get_by_slug(slug) is not None
+
+    async def status_events(self, project_id: uuid.UUID) -> list[ProjectStatusEvent]:
+        return [event for event in reversed(self.events) if event.project_id == project_id]
+
+    async def next_profile_position(self, user_id: uuid.UUID) -> int:
+        positions = [
+            member.profile_position
+            for project in self.projects.values()
+            for member in project.members
+            if member.user_id == user_id
+        ]
+        return max(positions, default=-1) + 1
+
+    def add[T](self, entity: T) -> T:
+        if isinstance(entity, Project):
+            self.projects[entity.id] = entity
+        elif isinstance(entity, ProjectStatusEvent):
+            self.events.append(entity)
+        return entity
+
+    async def delete(self, entity: Project) -> None:
+        self.projects.pop(entity.id, None)
+
+
+class FakeProjectInviteRepository:
+    def __init__(self) -> None:
+        self.invites: dict[uuid.UUID, ProjectInvite] = {}
+
+    async def get(self, invite_id: uuid.UUID) -> ProjectInvite | None:
+        return self.invites.get(invite_id)
+
+    async def list_pending_for_project(self, project_id: uuid.UUID) -> list[ProjectInvite]:
+        return [item for item in self._pending() if item.project_id == project_id]
+
+    async def list_pending_for_user(self, user_id: uuid.UUID) -> list[ProjectInvite]:
+        return [item for item in self._pending() if item.invitee_id == user_id]
+
+    async def find_pending(
+        self,
+        project_id: uuid.UUID,
+        invitee_id: uuid.UUID,
+    ) -> ProjectInvite | None:
+        return next(
+            (
+                item
+                for item in self._pending()
+                if item.project_id == project_id and item.invitee_id == invitee_id
+            ),
+            None,
+        )
+
+    def add(self, invite: ProjectInvite) -> ProjectInvite:
+        self.invites[invite.id] = invite
+        return invite
+
+    def _pending(self) -> list[ProjectInvite]:
+        return [
+            item for item in self.invites.values() if item.status is ProjectInviteStatus.PENDING
+        ]
+
+
+class FakeInviteQuota:
+    def __init__(self, limit: int = 30) -> None:
+        self.limit = limit
+        self.taken: list[uuid.UUID] = []
+
+    async def take(self, user_id: uuid.UUID) -> None:
+        self.taken.append(user_id)
+        if self.taken.count(user_id) > self.limit:
+            raise TooManyRequestsError("quota")
+
+
+class FakeProfileLayoutRepository:
+    def __init__(self) -> None:
+        self.rows: list[UserProfileBlock] = []
+
+    async def list_for_user(self, user_id: uuid.UUID) -> list[UserProfileBlock]:
+        return [row for row in self.rows if row.user_id == user_id]
+
+    async def delete_for_user(self, user_id: uuid.UUID) -> None:
+        self.rows = [row for row in self.rows if row.user_id != user_id]
+
+    def add(self, block: UserProfileBlock) -> UserProfileBlock:
+        self.rows.append(block)
+        return block

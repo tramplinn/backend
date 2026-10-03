@@ -20,6 +20,7 @@ from tramplin.infrastructure.gitlab import GitLabOAuthClient
 from tramplin.infrastructure.llm import LlmClient
 from tramplin.infrastructure.oauth_state import OAuthStateStore
 from tramplin.infrastructure.piston import PistonCodeRunner
+from tramplin.infrastructure.project_invite_quota import ProjectInviteQuota
 from tramplin.infrastructure.s3_storage import S3Storage
 from tramplin.infrastructure.tutor_quota import TutorQuota
 from tramplin.infrastructure.yandex import YandexOAuthClient
@@ -69,6 +70,10 @@ class AppProvider(Provider):
     @provide
     def tutor_quota(self, redis: Redis, settings: Settings) -> TutorQuota:
         return TutorQuota(redis, settings)
+
+    @provide
+    def project_invite_quota(self, redis: Redis, settings: Settings) -> ProjectInviteQuota:
+        return ProjectInviteQuota(redis, settings)
 
     @provide
     def email_code_store(self, redis: Redis, settings: Settings) -> EmailCodeStore:

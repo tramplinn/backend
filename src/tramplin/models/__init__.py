@@ -35,6 +35,14 @@ from tramplin.models.mcp_oauth import McpOAuthAuthorization, McpOAuthToken
 from tramplin.models.news import News, NewsPhoto
 from tramplin.models.notifications import EmailJobOutbox
 from tramplin.models.progress import LessonProgress, QuizAttempt
+from tramplin.models.projects import (
+    Project,
+    ProjectInvite,
+    ProjectLink,
+    ProjectMember,
+    ProjectStatusEvent,
+    UserProfileBlock,
+)
 from tramplin.models.quizzes import Quiz, QuizQuestion
 from tramplin.models.recommendations import EmbeddingJobOutbox
 from tramplin.models.users import RefreshToken, User, UserIdentity
@@ -72,6 +80,11 @@ __all__ = [
     "PracticeSession",
     "PracticeSet",
     "PracticeSetProblem",
+    "Project",
+    "ProjectInvite",
+    "ProjectLink",
+    "ProjectMember",
+    "ProjectStatusEvent",
     "QuestionType",
     "Quiz",
     "QuizAttempt",
@@ -82,5 +95,6 @@ __all__ = [
     "University",
     "User",
     "UserIdentity",
+    "UserProfileBlock",
     "UserRole",
 ]

@@ -15,6 +15,11 @@ from tramplin.infrastructure.repositories.mcp_oauth import McpOAuthRepository
 from tramplin.infrastructure.repositories.modules import ModuleRepository
 from tramplin.infrastructure.repositories.news import NewsRepository
 from tramplin.infrastructure.repositories.notifications import EmailJobRepository
+from tramplin.infrastructure.repositories.projects import (
+    ProfileLayoutRepository,
+    ProjectInviteRepository,
+    ProjectRepository,
+)
 from tramplin.infrastructure.repositories.quiz_attempts import QuizAttemptRepository
 from tramplin.infrastructure.repositories.quizzes import QuizRepository
 from tramplin.infrastructure.repositories.recommendations import RecommendationRepository
@@ -36,6 +41,9 @@ __all__ = [
     "McpOAuthRepository",
     "ModuleRepository",
     "NewsRepository",
+    "ProfileLayoutRepository",
+    "ProjectInviteRepository",
+    "ProjectRepository",
     "QuizAttemptRepository",
     "QuizRepository",
     "RecommendationRepository",

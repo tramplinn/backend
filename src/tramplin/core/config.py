@@ -92,6 +92,7 @@ class Settings(DatabaseSettings):
     s3_endpoint_url: str | None = None
     s3_public_url: str | None = None
     asset_max_bytes: int = 10 * 1024 * 1024
+    project_invites_hourly_quota: int = 30
 
     piston_url: str = "http://localhost:2000"
     algorithm_source_max_bytes: int = 100 * 1024

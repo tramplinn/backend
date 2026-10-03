@@ -1,7 +1,12 @@
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock
+
 import pytest
 import uuid_utils.compat as uuid
 
 from tests.conftest import AuthEnv
+from tests.fakes import FakeProfileLayoutRepository, FakeSession
 from tests.test_oauth_auth import start_login
 from tramplin.api.schemas.users import UserProfileUpdate
 from tramplin.api.v1.auth import me, update_me
@@ -11,6 +16,7 @@ from tramplin.models.assets import Asset
 from tramplin.models.enums import AssetMime, IdentityProvider, UserRole
 from tramplin.models.users import User, UserIdentity
 from tramplin.services.contracts import CourseActivity, ProfileStats
+from tramplin.services.profile_layout import ProfileLayoutService
 from tramplin.services.users import ensure_role
 
 
@@ -119,7 +125,12 @@ async def test_user_routes_hide_private_fields(env: AuthEnv) -> None:
 
     page = await search_users(result.user, env.users_service, q="student", limit=24, offset=0)
     profile = await get_user_profile(
-        result.user.login, result.user, env.users_service, env.settings
+        result.user.login,
+        result.user,
+        env.users_service,
+        ProfileLayoutService(FakeSession(), FakeProfileLayoutRepository()),
+        cast(Any, SimpleNamespace(list_for_profile=AsyncMock(return_value=[]))),
+        env.settings,
     )
 
     assert page.items[0].login == result.user.login
