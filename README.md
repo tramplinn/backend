@@ -20,7 +20,7 @@ make run
 ```
 
 В `.env` обязательно заполните `JWT_SECRET`, `GITHUB_CLIENT_ID` и
-`GITHUB_CLIENT_SECRET`. Для локального MinIO используйте:
+`GITHUB_CLIENT_SECRET`. Для локального RustFS используйте:
 
 ```dotenv
 S3_ACCESS_KEY=tramplin
@@ -35,7 +35,7 @@ S3_PUBLIC_URL=http://localhost:9000/tramplin
 - Swagger — `http://localhost:8000/docs`
 - liveness — `http://localhost:8000/api/v1/health`
 - readiness — `http://localhost:8000/api/v1/health/ready`
-- MinIO Console — `http://localhost:9001`
+- RustFS Console — `http://localhost:9001/rustfs/console/` (логин `tramplin` / `tramplin-dev-secret`)
 
 ## Команды
 
@@ -96,7 +96,7 @@ tests/              unit, repository и API-тесты
 ## Docker
 
 Локальный [`dev.docker-compose.yml`](dev.docker-compose.yml) поднимает PostgreSQL,
-Redis и MinIO. Полный набор вместе с API и worker:
+Redis и RustFS. Полный набор вместе с API и worker:
 
 ```bash
 docker compose -f dev.docker-compose.yml --profile full up --build

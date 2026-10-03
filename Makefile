@@ -8,7 +8,7 @@ install:
 	uv sync
 
 up:
-	$(DEV_COMPOSE) up -d postgres redis minio minio-init
+	$(DEV_COMPOSE) up -d postgres redis rustfs rustfs-init
 
 down:
 	$(DEV_COMPOSE) down
