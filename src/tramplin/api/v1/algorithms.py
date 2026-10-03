@@ -11,7 +11,7 @@ from tramplin.api.algorithm_mapping import (
     solution_out,
     submission_out,
 )
-from tramplin.api.dependencies import CurrentUser
+from tramplin.api.dependencies import CurrentUser, OptionalUser
 from tramplin.api.schemas.algorithms import (
     CompleteSession,
     PracticeSessionOut,
@@ -37,10 +37,10 @@ router = APIRouter(tags=["algorithms"], route_class=DishkaRoute)
 @router.get(
     "/algorithms/problems",
     summary="Каталог алгоритмических задач",
-    description="Опубликованные задачи с фильтрами и прогрессом текущего пользователя.",
+    description="Опубликованные задачи с фильтрами; прогресс — только для вошедшего пользователя.",
 )
 async def list_catalog(
-    user: CurrentUser,
+    user: OptionalUser,
     service: FromDishka[AlgorithmPracticeService],
     difficulty: AlgorithmDifficulty | None = None,
     tag_id: uuid.UUID | None = None,
@@ -49,7 +49,12 @@ async def list_catalog(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ProblemCatalogOut:
     catalog = await service.list_catalog(
-        user.id, difficulty=difficulty, tag_id=tag_id, query=query, limit=limit, offset=offset
+        user.id if user else None,
+        difficulty=difficulty,
+        tag_id=tag_id,
+        query=query,
+        limit=limit,
+        offset=offset,
     )
     return ProblemCatalogOut(
         items=[problem_card_out(problem, progress) for problem, progress in catalog.items],
@@ -126,7 +131,7 @@ async def complete_session(
     description="Условие опубликованной задачи для решения в тренажёре.",
 )
 async def get_problem(
-    problem_id: uuid.UUID, _: CurrentUser, service: FromDishka[AlgorithmPracticeService]
+    problem_id: uuid.UUID, service: FromDishka[AlgorithmPracticeService]
 ) -> ProblemOut:
     return problem_out(await service.get_problem(problem_id))
 
@@ -136,7 +141,7 @@ async def get_problem(
     summary="Доступные языки для решения задач",
     description="Языки, которые сейчас может запускать исполнитель кода.",
 )
-async def languages(_: CurrentUser, runner: FromDishka[CodeRunner]) -> list[RunnerLanguageOut]:
+async def languages(runner: FromDishka[CodeRunner]) -> list[RunnerLanguageOut]:
     return [RunnerLanguageOut.model_validate(language) for language in await runner.languages()]
 
 

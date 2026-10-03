@@ -37,7 +37,7 @@ async def test_lesson_and_course_progress(
     assert reopened.status_code == 204
     assert (await client.get("/progress/lessons", headers=student.headers)).json() == []
 
-    profile = await client.get(f"/users/{student.login}")
+    profile = await client.get(f"/users/{student.login}", headers=student.headers)
     assert profile.json()["completed_lessons"] == 0
 
 

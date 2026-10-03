@@ -1,6 +1,7 @@
 """Пользователи, админка, обратная связь и загрузка файлов."""
 
 import httpx
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -74,21 +75,27 @@ async def test_search_users_and_public_profile(
     await make_user(login="ghost-dev", is_active=False)
     await client.patch("/auth/me", json={"bio": "Пишу на Go"}, headers=alice.headers)
 
-    search = await client.get("/users", params={"q": "alice"})
+    search = await client.get("/users", params={"q": "alice"}, headers=alice.headers)
     assert search.status_code == 200
     page = search.json()
     assert page["total"] == 1
     assert page["items"][0]["login"] == "alice-dev"
     assert "email" not in page["items"][0]
 
-    profile = await client.get("/users/alice-dev")
+    profile = await client.get("/users/alice-dev", headers=alice.headers)
     assert profile.status_code == 200
     assert profile.json()["bio"] == "Пишу на Go"
     assert profile.json()["completed_lessons"] == 0
 
 
-async def test_public_profile_not_found(client: httpx.AsyncClient) -> None:
-    assert_error(await client.get("/users/nobody"), 404, "not_found")
+async def test_profile_not_found(client: httpx.AsyncClient, make_user: MakeUser) -> None:
+    viewer = await make_user(login="viewer-dev")
+    assert_error(await client.get("/users/nobody", headers=viewer.headers), 404, "not_found")
+
+
+@pytest.mark.parametrize("path", ["/users", "/users/alice-dev"])
+async def test_people_require_auth(client: httpx.AsyncClient, path: str) -> None:
+    assert (await client.get(path)).status_code == 401
 
 
 async def test_admin_lists_and_updates_users(

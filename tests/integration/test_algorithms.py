@@ -7,7 +7,6 @@ Postgres и фейкового раннера — проверяем путь «
 from typing import Any
 
 import httpx
-import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
@@ -179,7 +178,7 @@ async def test_student_solves_problem(
     )
     assert closed.status_code in {409, 422}, closed.text
 
-    profile = await client.get(f"/users/{student.login}")
+    profile = await client.get(f"/users/{student.login}", headers=h)
     assert profile.json()["solved_algorithms"] == 1
 
     # Задачу с решениями можно удалить: история по ней уходит каскадом.
@@ -336,8 +335,11 @@ async def test_practice_sets(client: httpx.AsyncClient, teacher: Actor, student:
     )
 
 
-@pytest.mark.parametrize("path", ["/algorithms/problems", "/algorithms/languages"])
-async def test_student_algorithm_endpoints_require_auth(
-    client: httpx.AsyncClient, path: str
-) -> None:
-    assert (await client.get(path)).status_code == 401
+async def test_guest_can_browse_catalog(client: httpx.AsyncClient) -> None:
+    response = await client.get("/algorithms/problems")
+    assert response.status_code == 200
+    assert all(item["status"] == "unseen" for item in response.json()["items"])
+
+
+async def test_guest_cannot_execute_code(client: httpx.AsyncClient) -> None:
+    assert (await client.post("/practice-sessions")).status_code == 401

@@ -3,6 +3,7 @@ from typing import Annotated
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Query
 
+from tramplin.api.dependencies import CurrentUser
 from tramplin.api.schemas.pagination import PageOut
 from tramplin.api.schemas.users import CourseActivityOut, PublicProfileOut, PublicUserOut
 from tramplin.api.user_mapping import with_resume_url
@@ -16,9 +17,10 @@ SearchQuery = Annotated[str | None, Query(max_length=200)]
 @router.get(
     "",
     summary="Поиск пользователей",
-    description="Публичный поиск по активным пользователям с постраничным выводом.",
+    description="Поиск по активным пользователям с постраничным выводом; только для вошедших.",
 )
 async def search_users(
+    _: CurrentUser,
     users: FromDishka[UserService],
     q: SearchQuery = None,
     limit: int = Query(default=24, ge=1, le=50),
@@ -35,11 +37,12 @@ async def search_users(
 
 @router.get(
     "/{login}",
-    summary="Публичный профиль пользователя",
-    description="Профиль по логину вместе со сводной статистикой обучения.",
+    summary="Профиль пользователя",
+    description="Профиль по логину со сводной статистикой обучения; только для вошедших.",
 )
 async def get_user_profile(
     login: str,
+    _: CurrentUser,
     users: FromDishka[UserService],
     settings: FromDishka[Settings],
 ) -> PublicProfileOut:

@@ -53,7 +53,7 @@ class AlgorithmPracticeService:
 
     async def list_catalog(
         self,
-        user_id: uuid.UUID,
+        user_id: uuid.UUID | None,
         *,
         difficulty: AlgorithmDifficulty | None = None,
         tag_id: uuid.UUID | None = None,
@@ -64,7 +64,12 @@ class AlgorithmPracticeService:
         problems, total = await self._algorithms.list_published_problems(
             difficulty=difficulty, tag_id=tag_id, query=query, limit=limit, offset=offset
         )
-        progress = await self._algorithms.progress_map(user_id, [item.id for item in problems])
+        # Гость смотрит каталог без прогресса: запускать решения он всё равно не может.
+        progress = (
+            await self._algorithms.progress_map(user_id, [item.id for item in problems])
+            if user_id is not None
+            else {}
+        )
         tags = await self._algorithms.published_tags()
         return ProblemCatalog(
             items=[(problem, progress.get(problem.id)) for problem in problems],

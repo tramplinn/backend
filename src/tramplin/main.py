@@ -24,7 +24,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {"name": "content", "description": "Публичный каталог: треки, курсы, уроки, тесты."},
     {"name": "news", "description": "Новостная лента."},
-    {"name": "users", "description": "Публичные профили пользователей."},
+    {"name": "users", "description": "Профили пользователей (только для вошедших)."},
     {"name": "feedback", "description": "Обратная связь от пользователей."},
     {"name": "learning", "description": "Прогресс обучения и прохождение тестов."},
     {"name": "assets", "description": "Загрузка файлов (изображения, вложения)."},

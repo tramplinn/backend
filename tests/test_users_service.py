@@ -113,12 +113,14 @@ async def test_me_route_exposes_resume_url(env: AuthEnv) -> None:
     assert profile.resume_url == f"{env.settings.s3_public_base_url}/assets/cv.pdf"
 
 
-async def test_public_user_routes_hide_private_fields(env: AuthEnv) -> None:
+async def test_user_routes_hide_private_fields(env: AuthEnv) -> None:
     result = await env.github.complete_callback("code", await start_login(env.github))
     env.users.stats = ProfileStats(1, 2, 3)
 
-    page = await search_users(env.users_service, q="student", limit=24, offset=0)
-    profile = await get_user_profile(result.user.login, env.users_service, env.settings)
+    page = await search_users(result.user, env.users_service, q="student", limit=24, offset=0)
+    profile = await get_user_profile(
+        result.user.login, result.user, env.users_service, env.settings
+    )
 
     assert page.items[0].login == result.user.login
     assert not hasattr(page.items[0], "email")
