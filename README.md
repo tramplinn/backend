@@ -1,14 +1,14 @@
 # Tramplin Backend
 
-API учебной платформы: курсы, уроки, тесты, прогресс, authoring, OAuth,
-S3-файлы, AI-ассистент и запуск алгоритмических задач.
+The platform's API: courses, lessons, quizzes, progress, authoring, OAuth, file
+uploads, the AI assistant, and running algorithm problems.
 
-Стек: Python 3.14, FastAPI, Pydantic, SQLAlchemy, PostgreSQL, Redis, RabbitMQ,
-Alembic и uv.
+Stack: Python 3.14, FastAPI, Pydantic, SQLAlchemy, PostgreSQL, Redis, RabbitMQ,
+Alembic, uv.
 
-## Быстрый старт
+## Quick start
 
-Нужны Python `>=3.14,<3.15`, [uv](https://docs.astral.sh/uv/) и Docker Compose.
+You need Python 3.14, [uv](https://docs.astral.sh/uv/), and Docker Compose.
 
 ```bash
 cp .env.dev.example .env
@@ -19,8 +19,8 @@ make seed
 make run
 ```
 
-В `.env` обязательно заполните `JWT_SECRET`, `GITHUB_CLIENT_ID` и
-`GITHUB_CLIENT_SECRET`. Для локального RustFS используйте:
+Set `JWT_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET` in `.env`. For
+the local RustFS storage:
 
 ```dotenv
 S3_ACCESS_KEY=tramplin
@@ -29,115 +29,60 @@ S3_ENDPOINT_URL=http://localhost:9000
 S3_PUBLIC_URL=http://localhost:9000/tramplin
 ```
 
-После запуска:
+Then open:
 
 - API — `http://localhost:8000/api/v1`
 - Swagger — `http://localhost:8000/docs`
-- liveness — `http://localhost:8000/api/v1/health`
-- readiness — `http://localhost:8000/api/v1/health/ready`
-- RustFS Console — `http://localhost:9001/rustfs/console/` (логин `tramplin` / `tramplin-dev-secret`)
+- health — `/api/v1/health` and `/api/v1/health/ready`
+- RustFS Console — `http://localhost:9001/rustfs/console/` (`tramplin` / `tramplin-dev-secret`)
 
-## Команды
+### With Docker
 
-```bash
-make run                 # API с autoreload
-make check               # Ruff, mypy и pytest
-make revision m="name"   # создать Alembic-миграцию
-make migrate             # применить миграции
-make seed                # загрузить demo-данные
-make down                # остановить локальные сервисы
-```
-
-Тестовое покрытие должно быть не ниже 90%.
-
-## Конфигурация
-
-Настройки читаются из переменных окружения. Шаблоны находятся в
-[`.env.dev.example`](.env.dev.example) для разработки и
-[`.env.example`](.env.example) для деплоя; полный список определён в
-[`src/tramplin/core/config.py`](src/tramplin/core/config.py).
-
-Основные группы:
-
-- `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URL`
-- `JWT_*`, `GITHUB_*`, `YANDEX_*`
-- `S3_*`, `ASSET_MAX_BYTES`
-- `LLM_*`
-- `PISTON_URL`, `ALGORITHM_*`
-
-Если `LLM_MODEL` или `LLM_API_KEY` пусты, AI-ассистент отключён. Длительности
-принимаются в секундах или ISO 8601 (`900`, `PT15M`, `P30D`).
-
-## Структура
-
-```text
-src/tramplin/
-  api/             HTTP-роутеры и схемы
-  services/        бизнес-логика и порты
-  infrastructure/  PostgreSQL, Redis, S3, OAuth, LLM и Piston
-  models/          SQLAlchemy-модели
-  core/            конфигурация, DI и безопасность
-  main.py          FastAPI application factory
-  worker.py        RabbitMQ algorithm worker
-alembic/            миграции
-scripts/            demo seed
-tests/              unit, repository и API-тесты
-```
-
-Направление зависимостей: `API → services ← infrastructure`. Сервисы не зависят
-от FastAPI, а внешние реализации подключаются через Dishka.
-
-Основные маршруты находятся под `/api/v1`:
-
-- `/auth`, `/tracks`, `/courses`, `/lessons`, `/quizzes`
-- `/progress`, `/assets`, `/tutor`
-- `/authoring` и `/admin`
-
-## Docker
-
-Локальный [`dev.docker-compose.yml`](dev.docker-compose.yml) поднимает PostgreSQL,
-Redis и RustFS. Полный набор вместе с API и worker:
+To run the API and worker in containers too:
 
 ```bash
 docker compose -f dev.docker-compose.yml --profile full up --build
 ```
 
-RabbitMQ и Piston предоставляет соседний репозиторий `infra` через общую сеть
-`tramplin-edge`.
+RabbitMQ and Piston come from the `infra` repository over the shared
+`tramplin-edge` network.
 
-Staging/production используют [`docker-compose.yml`](docker-compose.yml):
+## Commands
 
 ```bash
-cp .env.example .env.runtime
-make staging-config
-make staging-up
+make run                 # API with autoreload
+make check               # Ruff, mypy, pytest
+make revision m="name"   # new Alembic migration
+make migrate             # apply migrations
+make seed                # load demo data
+make down                # stop local services
 ```
 
-Compose поднимает PostgreSQL и Redis, запускает одноразовую миграцию, затем API и
-worker и ждёт их healthchecks. `make staging-down` останавливает контейнеры, но
-сохраняет volumes.
+Test coverage must stay at 90% or higher.
 
-Cloud S3 bucket, DNS, TLS, backups, RabbitMQ, Piston и сеть `tramplin-edge`
-подготавливаются отдельно.
+## Structure
 
-## CI/CD
+```text
+src/tramplin/
+  api/             HTTP routers and schemas
+  services/        business logic and ports
+  infrastructure/  PostgreSQL, Redis, S3, OAuth, LLM, Piston
+  models/          SQLAlchemy models
+  core/            config, DI, security
+  main.py          app factory
+  worker.py        algorithm worker
+alembic/            migrations
+scripts/            demo seed
+tests/              unit, repository, and API tests
+```
 
-Pipeline выполняет quality/security checks, собирает и сканирует один immutable
-образ, затем разворачивает его на stage или production. API, worker и migration
-service используют один `API_IMAGE`.
+Dependencies point inward: `API → services ← infrastructure`. Services know
+nothing about FastAPI; implementations are wired in with Dishka.
 
-Нужные protected CI/CD variables:
+Routes live under `/api/v1`: `/auth`, `/tracks`, `/courses`, `/lessons`,
+`/quizzes`, `/progress`, `/assets`, `/tutor`, `/authoring`, `/admin`.
 
-- `SERVER_IP`, `SSH_PORT`, `SSH_USER`, `SSH_PRIVATE_KEY`
-- `STAGE_ENV`, `PROD_ENV` типа File
-- `STAGE_URL`, `PROD_URL`
+## Docs
 
-Ветки `stage` и `main` разворачиваются как отдельные Compose-проекты
-`tramplin-stage` и `tramplin-prod`. При ошибке job печатает состояние и последние
-логи проекта.
-
-## Документация
-
-- [Продуктовые спецификации](https://gitlab.com/tramplin1/specs) — бизнес-ценность,
-  продукты и пользовательские кейсы.
-- [PRD авторинга алгоритмических задач через MCP](https://gitlab.com/tramplin1/mcp-server/-/blob/main/docs/algorithm-authoring-prd.md)
+- [Product specs](https://gitlab.com/tramplin1/specs)
+- [PRD: authoring algorithm problems via MCP](https://gitlab.com/tramplin1/mcp-server/-/blob/main/docs/algorithm-authoring-prd.md)
