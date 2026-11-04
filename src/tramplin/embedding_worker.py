@@ -37,7 +37,7 @@ class EmbeddingWorkerApplication:
         self.settings = settings
         self.engine, self.session_factory = build_engine_and_sessionmaker(settings)
         self.broker = RabbitBroker(settings.rabbitmq_url)
-        # declare=False: топология — в infra/rabbitmq/definitions.json, не здесь.
+        # declare=False: топология — в infra/k8s/rabbitmq/configmap.yaml, не здесь.
         # Отсутствующая очередь — явная ошибка на старте, а не молчаливое создание.
         self.job_queue = RabbitQueue(
             settings.embedding_queue_name,

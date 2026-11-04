@@ -10,22 +10,11 @@ workflow:
     - if: "$CI_COMMIT_BRANCH"
 
 default:
-  tags:
-    - docker
-    - linux
+  tags: [saas-linux-small-amd64]
 
 variables:
-  API_IMAGE: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA"
+  API_IMAGE: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
-
-compose-config:
-  stage: test
-  needs: []
-  image: docker:29.7.2
-  script:
-    - cp .env.example .env.runtime
-    - COMPOSE_PROJECT_NAME=tramplin-stage docker compose
-      --env-file .env.runtime config --quiet
 
 quality:
   stage: test
@@ -49,9 +38,9 @@ quality:
   before_script:
     - uv sync --frozen
   script:
-    - uv run ruff check src tests scripts alembic
-    - uv run ruff format --check src tests scripts alembic
-    - uv run mypy src tests scripts alembic
+    - uv run ruff check src tests admin alembic
+    - uv run ruff format --check src tests admin alembic
+    - uv run mypy src tests admin alembic
     - uv run pytest --junitxml=report.xml --cov-report=xml:coverage.xml
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)$/'
   artifacts:
@@ -96,8 +85,14 @@ build:
     - job: quality
       artifacts: false
   image: docker:29.7.2
+  services:
+    - name: docker:29.7.2-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "stage"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   retry:
     max: 2
     when:
@@ -115,118 +110,84 @@ build:
     - docker logout "$CI_REGISTRY"
     - docker builder prune -af
 
-.deploy:
-  stage: deploy
-  needs:
-    - job: build
-      artifacts: false
-    - job: compose-config
-      artifacts: false
-    - job: gitleaks
-      artifacts: false
-    - job: semgrep
-      artifacts: false
-    - job: trivy-sca
-      artifacts: false
-  image: alpine:3.24.1
-  retry:
-    max: 2
-    when: [script_failure, runner_system_failure]
-  before_script:
-    - apk add --no-cache openssh-client
-    - export SSH_AUTH_SOCK=/tmp/ssh-agent.sock
-    - ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
-    - echo "$SSH_PRIVATE_KEY" | base64 -d | ssh-add -
-    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - printf 'Host *\n  Port %s\n  StrictHostKeyChecking accept-new\n' "$SSH_PORT" > ~/.ssh/config
-    - chmod 600 ~/.ssh/config
+validate-k8s:
+  stage: test
+  image:
+    name: alpine/kubectl:1.37.1
+    entrypoint: [""]
+  tags: [saas-linux-small-amd64]
   script:
-    - ssh "$SSH_USER@$SERVER_IP" "mkdir -p $DEPLOY_PATH"
-    - scp docker-compose.yml "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/"
-    - scp "$DEPLOY_ENV" "$SSH_USER@$SERVER_IP:$DEPLOY_PATH/.env.runtime"
-    - ssh "$SSH_USER@$SERVER_IP" "chmod 600 $DEPLOY_PATH/.env.runtime"
-    - printf '%s' "$CI_REGISTRY_PASSWORD" |
-      ssh "$SSH_USER@$SERVER_IP" "docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY"
-    - |
-      ssh "$SSH_USER@$SERVER_IP" \
-        "bash -s -- '$DEPLOY_PATH' '$DEPLOY_PROJECT' '$API_IMAGE' '$CI_REGISTRY'" <<'REMOTE'
-      set -euo pipefail
-
-      cd "$1"
-      export COMPOSE_PROJECT_NAME="$2"
-      export API_IMAGE="$3"
-      registry=$4
-      compose=(docker compose --env-file .env.runtime)
-
-      trap '"${compose[@]}" ps; "${compose[@]}" logs --tail 100' ERR
-      trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
-
-      "${compose[@]}" config --quiet
-      # Реестр GitLab иногда отдаёт "repository does not exist" на pull через
-      # пару секунд после успешного push, а containerd иногда падает на
-      # распаковке слоя гонкой в overlayfs (UtimesNanoAt: no such file or
-      # directory). Оба случая обычно проходят со второй попытки.
-      for attempt in 1 2 3 4 5; do
-        "${compose[@]}" pull --quiet && break
-        [ "$attempt" -eq 5 ] && exit 1
-        sleep $((attempt * 5))
-      done
-      "${compose[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 60
-      docker image prune -f
-      REMOTE
-
-deploy-stage:
-  extends: .deploy
-  variables:
-    DEPLOY_PATH: "/opt/tramplin/stage/backend"
-    DEPLOY_PROJECT: "tramplin-stage"
-    DEPLOY_ENV: "$STAGE_ENV"
-  environment:
-    name: staging
-    url: "$STAGE_URL"
-  resource_group: staging
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "stage"'
+    - kubectl kustomize k8s/ > /dev/null
 
 deploy-production:
-  extends: .deploy
+  stage: deploy
+  image:
+    name: alpine/kubectl:1.37.1
+    entrypoint: [""]
+  tags: [saas-linux-small-amd64]
   variables:
-    DEPLOY_PATH: "/opt/tramplin/production/backend"
-    DEPLOY_PROJECT: "tramplin-prod"
-    DEPLOY_ENV: "$PROD_ENV"
+    KUBE_CONTEXT: tramplin1/infra:tramplin
+  resource_group: tramplin-production
   environment:
     name: production
-    url: "$PROD_URL"
-  # Два деплоя подряд гоняли docker compose up на одном сервере параллельно
-  # и словили конфликт имён контейнеров — resource_group ставит второй в очередь.
-  resource_group: production
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+  allow_failure: false
+  timeout: 60m
+  script:
+    - kubectl config use-context "$KUBE_CONTEXT"
+    - sed -i "s/REPLACE_WITH_COMMIT_SHA/$CI_COMMIT_SHA/g" k8s/kustomization.yaml
+    - sed -i "s/REPLACE_PROJECT_ID/$CI_PROJECT_ID/g" k8s/secrets/store.yaml
+    - |
+      if grep -Eq 'REPLACE_|\.invalid' k8s/configmap.yaml; then
+        echo 'Fill public settings in k8s/configmap.yaml before deployment.' >&2
+        exit 1
+      fi
+    - kubectl apply --dry-run=server -k k8s/ >/dev/null
+    - kubectl apply --dry-run=server -f k8s/migration-job.yaml >/dev/null
+    - kubectl -n tramplin apply -f k8s/secrets/store.yaml
+    - kubectl -n tramplin wait --for=condition=Ready secretstore/gitlab-tramplin-backend --timeout=120s
+    - kubectl -n tramplin apply -f k8s/secrets/external-secrets.yaml
+    - kubectl -n tramplin wait --for=condition=Ready externalsecret/tramplin-backend --timeout=180s
+    - kubectl -n tramplin wait --for=condition=Ready externalsecret/gitlab-registry --timeout=180s
+    - kubectl -n tramplin wait --for=condition=Ready externalsecret/postgres-app externalsecret/redis externalsecret/rabbitmq --timeout=180s
+    - kubectl -n tramplin rollout status statefulset/postgres --timeout=300s
+    - kubectl -n tramplin rollout status statefulset/redis --timeout=300s
+    - kubectl -n tramplin rollout status statefulset/rabbitmq --timeout=300s
+    - kubectl -n tramplin rollout status statefulset/piston --timeout=600s
+    - sed -i "s/REPLACE_WITH_COMMIT_SHA/$CI_COMMIT_SHA/g" k8s/migration-job.yaml
+    - kubectl -n tramplin delete job tramplin-migrate --ignore-not-found --wait=true --timeout=60s
+    - kubectl create -f k8s/migration-job.yaml
+    - |
+      if ! kubectl -n tramplin wait --for=condition=Complete job/tramplin-migrate --timeout=660s; then
+        kubectl -n tramplin logs job/tramplin-migrate --tail=100 || true
+        exit 1
+      fi
+    - kubectl apply -k k8s/
+    - kubectl -n tramplin rollout restart deployment/tramplin-api
+    - kubectl -n tramplin rollout status deployment/tramplin-api --timeout=600s
+    - kubectl -n tramplin rollout restart deployment/tramplin-algorithm-worker
+    - kubectl -n tramplin rollout status deployment/tramplin-algorithm-worker --timeout=600s
+    - kubectl -n tramplin rollout restart deployment/tramplin-embedding-worker
+    - kubectl -n tramplin rollout status deployment/tramplin-embedding-worker --timeout=600s
+    - kubectl -n tramplin rollout restart deployment/tramplin-email-worker
+    - kubectl -n tramplin rollout status deployment/tramplin-email-worker --timeout=600s
+    - kubectl -n tramplin wait --for=create certificate/tramplin-api-tls --timeout=120s
+    - kubectl -n tramplin wait --for=condition=Ready certificate/tramplin-api-tls --timeout=600s
 
 nuclei-scan:
   stage: scan
-  needs:
-    - job: deploy-stage
-      artifacts: false
-      optional: true
-    - job: deploy-production
-      artifacts: false
-      optional: true
+  needs: [deploy-production]
   image:
     name: projectdiscovery/nuclei:v3.11.0
     entrypoint: [""]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
   script:
-    - nuclei -u "$TARGET_URL" -severity critical,high,medium
-      -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
+    - ': "${PROD_URL:?Set the public production URL}"'
+    - nuclei -u "$PROD_URL" -severity critical,high,medium -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
   artifacts:
     when: always
-    paths:
-      - nuclei-report.jsonl
+    paths: [nuclei-report.jsonl]
     expire_in: 7 days
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "stage"'
-      variables:
-        TARGET_URL: "$STAGE_URL"
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      variables:
-        TARGET_URL: "$PROD_URL"

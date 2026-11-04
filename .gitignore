@@ -1,6 +1,6 @@
 .env
-.env.staging
-.env.runtime
+.env.*
+!.env*.example
 .venv/
 __pycache__/
 *.py[cod]

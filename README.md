@@ -1,3 +1,5 @@
+> Production в k3s: [манифесты, настройки и порядок запуска](k8s/README.md).
+
 # Tramplin Backend
 
 The platform's API: courses, lessons, quizzes, progress, authoring, OAuth, file
@@ -44,8 +46,10 @@ To run the API and worker in containers too:
 docker compose -f dev.docker-compose.yml --profile full up --build
 ```
 
-RabbitMQ and Piston come from the `infra` repository over the shared
-`tramplin-edge` network.
+RabbitMQ с локальными очередями входит в dev Compose. Piston подключается отдельно:
+для процессов на хосте задайте `PISTON_URL`, для контейнеров — `PISTON_CONTAINER_URL`
+(по умолчанию `http://host.docker.internal:2000`). Без доступного Piston выполнение
+пользовательского кода не работает. Production Piston разворачивается CI в k3s.
 
 ## Commands
 
@@ -72,7 +76,7 @@ src/tramplin/
   main.py          app factory
   worker.py        algorithm worker
 alembic/            migrations
-scripts/            demo seed
+admin/              demo seed
 tests/              unit, repository, and API tests
 ```
 

@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tramplin
+resources:
+- secrets/store.yaml
+- secrets/external-secrets.yaml
+- configmap.yaml
+- deployment.yaml
+- workers.yaml
+- service.yaml
+- ingress.yaml
+images:
+- name: registry.gitlab.com/tramplin1/backend/api
+  newTag: REPLACE_WITH_COMMIT_SHA
+replacements:
+- source:
+    kind: ConfigMap
+    name: tramplin-backend
+    fieldPath: data.PUBLIC_HOST
+  targets:
+  - select:
+      kind: Ingress
+      name: tramplin-api
+    fieldPaths:
+    - spec.rules.0.host
+    - spec.tls.0.hosts.0

@@ -14,5 +14,5 @@ dist
 build
 *.egg-info
 tests
-scripts
+admin
 artifacts

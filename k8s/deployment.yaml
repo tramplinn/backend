@@ -1,0 +1,229 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tramplin-api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: tramplin-api
+  template:
+    metadata:
+      labels:
+        app: tramplin-api
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: api
+        image: registry.gitlab.com/tramplin1/backend/api:REPLACE_WITH_COMMIT_SHA
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: tramplin-backend
+        env:
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: POSTGRES_DB
+        - name: POSTGRES_APP_USER
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: POSTGRES_APP_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-app
+              key: password
+        - name: DATABASE_URL
+          value: postgresql+asyncpg://$(POSTGRES_APP_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: REDIS_PORT
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: RABBITMQ_HOST
+        - name: RABBITMQ_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: RABBITMQ_PORT
+        - name: RABBITMQ_USER
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: RABBITMQ_USER
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis
+              key: password
+        - name: REDIS_URL
+          value: redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)/0
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq
+              key: password
+        - name: RABBITMQ_URL
+          value: amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/
+        - name: ALGORITHM_QUEUE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: ALGORITHM_QUEUE_NAME
+        - name: EMBEDDING_QUEUE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: EMBEDDING_QUEUE_NAME
+        - name: EMAIL_TRANSACTIONAL_QUEUE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: EMAIL_TRANSACTIONAL_QUEUE_NAME
+        - name: EMAIL_BULK_QUEUE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: tramplin-infra
+              key: EMAIL_BULK_QUEUE_NAME
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: JWT_SECRET
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: GITHUB_CLIENT_SECRET
+        - name: MCP_OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: MCP_OAUTH_CLIENT_SECRET
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: S3_ACCESS_KEY
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: S3_SECRET_KEY
+        - name: LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: LLM_API_KEY
+              optional: true
+        - name: YANDEX_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: YANDEX_CLIENT_SECRET
+              optional: true
+        - name: GITLAB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tramplin-backend
+              key: GITLAB_CLIENT_SECRET
+              optional: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        command:
+        - uvicorn
+        - tramplin.main:create_app
+        - --factory
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        - --proxy-headers
+        startupProbe:
+          httpGet:
+            path: /api/v1/health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health/ready
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: http
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: tramplin-api
+              topologyKey: kubernetes.io/hostname
