@@ -76,7 +76,7 @@ src/tramplin/
   main.py          app factory
   worker.py        algorithm worker
 alembic/            migrations
-admin/              demo seed
+scripts/            demo seed
 tests/              unit, repository, and API tests
 ```
 

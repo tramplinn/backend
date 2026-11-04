@@ -38,9 +38,9 @@ quality:
   before_script:
     - uv sync --frozen
   script:
-    - uv run ruff check src tests admin alembic
-    - uv run ruff format --check src tests admin alembic
-    - uv run mypy src tests admin alembic
+    - uv run ruff check src tests scripts alembic
+    - uv run ruff format --check src tests scripts alembic
+    - uv run mypy src tests scripts alembic
     - uv run pytest --junitxml=report.xml --cov-report=xml:coverage.xml
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)$/'
   artifacts:

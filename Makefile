@@ -15,20 +15,20 @@ migrate:
 	uv run alembic upgrade head
 
 seed:
-	uv run python admin/seed_demo.py
+	uv run python scripts/seed_demo.py
 
 revision:
 	uv run alembic revision --autogenerate -m "$(m)"
 
 lint:
-	uv run ruff check src tests admin alembic
-	uv run ruff format --check src tests admin alembic
+	uv run ruff check src tests scripts alembic
+	uv run ruff format --check src tests scripts alembic
 
 format:
-	uv run ruff format src tests admin alembic
+	uv run ruff format src tests scripts alembic
 
 typecheck:
-	uv run mypy src tests admin alembic
+	uv run mypy src tests scripts alembic
 
 test:
 	uv run pytest
