@@ -178,6 +178,7 @@ async def test_piston_maps_unavailable_responses(settings: Settings) -> None:
             httpx.Response(200, json={}),
             httpx.Response(500, text="secret failure"),
             httpx.Response(200, text="not-json"),
+            httpx.Response(200, json={"language": "python", "version": "3.12.0"}),
         ]
     )
 
@@ -194,4 +195,6 @@ async def test_piston_maps_unavailable_responses(settings: Settings) -> None:
         with pytest.raises(RunnerUnavailableError, match="недоступна"):
             await runner.submit(request)
         with pytest.raises(RunnerUnavailableError, match="недоступна"):
+            await runner.submit(request)
+        with pytest.raises(RunnerUnavailableError, match="некорректный ответ"):
             await runner.submit(request)
