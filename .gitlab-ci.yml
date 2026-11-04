@@ -137,7 +137,7 @@ deploy-production:
   timeout: 60m
   script:
     - kubectl config use-context "$KUBE_CONTEXT"
-    - sed -i "s/REPLACE_WITH_COMMIT_SHA/$CI_COMMIT_SHA/g" k8s/kustomization.yaml
+    - sed -i "s/REPLACE_WITH_COMMIT_SHA/$CI_COMMIT_SHA/g" k8s/kustomization.yaml k8s/migration-job.yaml
     - sed -i "s/REPLACE_PROJECT_ID/$CI_PROJECT_ID/g" k8s/secrets/store.yaml
     - |
       if grep -Eq 'REPLACE_|\.invalid' k8s/configmap.yaml; then
@@ -145,7 +145,6 @@ deploy-production:
         exit 1
       fi
     - kubectl apply --dry-run=server -k k8s/ >/dev/null
-    - kubectl apply --dry-run=server -f k8s/migration-job.yaml >/dev/null
     - kubectl -n tramplin apply -f k8s/secrets/store.yaml
     - kubectl -n tramplin wait --for=condition=Ready secretstore/gitlab-tramplin-backend --timeout=120s
     - kubectl -n tramplin apply -f k8s/secrets/external-secrets.yaml
@@ -156,8 +155,8 @@ deploy-production:
     - kubectl -n tramplin rollout status statefulset/redis --timeout=300s
     - kubectl -n tramplin rollout status statefulset/rabbitmq --timeout=300s
     - kubectl -n tramplin rollout status statefulset/piston --timeout=600s
-    - sed -i "s/REPLACE_WITH_COMMIT_SHA/$CI_COMMIT_SHA/g" k8s/migration-job.yaml
     - kubectl -n tramplin delete job tramplin-migrate --ignore-not-found --wait=true --timeout=60s
+    - kubectl create --dry-run=server -f k8s/migration-job.yaml >/dev/null
     - kubectl create -f k8s/migration-job.yaml
     - |
       if ! kubectl -n tramplin wait --for=condition=Complete job/tramplin-migrate --timeout=660s; then
@@ -175,13 +174,6 @@ deploy-production:
     - kubectl -n tramplin rollout status deployment/tramplin-email-worker --timeout=600s
     - kubectl -n tramplin wait --for=create certificate/tramplin-api-tls --timeout=120s
     - kubectl -n tramplin wait --for=condition=Ready certificate/tramplin-api-tls --timeout=600s
-    - |
-      public_host=$(kubectl -n tramplin get configmap tramplin-backend -o jsonpath='{.data.PUBLIC_HOST}')
-      printf 'SCAN_URL=https://%s\n' "$public_host" > deploy.env
-  artifacts:
-    reports:
-      dotenv: deploy.env
-    expire_in: 1 day
 
 nuclei-scan:
   stage: scan
@@ -191,9 +183,12 @@ nuclei-scan:
     entrypoint: [""]
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
+  before_script:
+    - apk add --no-cache yq
   script:
-    - ': "${SCAN_URL:?Deploy job must provide SCAN_URL}"'
-    - nuclei -u "$SCAN_URL" -severity critical,high,medium -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
+    - public_host=$(yq -er '.data.PUBLIC_HOST' k8s/configmap.yaml)
+    - nuclei -u "https://$public_host" -severity critical,high,medium -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
+    - test ! -s nuclei-report.jsonl
   artifacts:
     when: always
     paths: [nuclei-report.jsonl]

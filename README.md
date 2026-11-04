@@ -1,4 +1,4 @@
-> Production в k3s: [манифесты, настройки и порядок запуска](k8s/README.md).
+> Production в k3s: [манифесты, настройки и порядок запуска](k8s/).
 
 # Tramplin Backend
 
