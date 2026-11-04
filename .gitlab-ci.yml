@@ -175,6 +175,13 @@ deploy-production:
     - kubectl -n tramplin rollout status deployment/tramplin-email-worker --timeout=600s
     - kubectl -n tramplin wait --for=create certificate/tramplin-api-tls --timeout=120s
     - kubectl -n tramplin wait --for=condition=Ready certificate/tramplin-api-tls --timeout=600s
+    - |
+      public_host=$(kubectl -n tramplin get configmap tramplin-backend -o jsonpath='{.data.PUBLIC_HOST}')
+      printf 'SCAN_URL=https://%s\n' "$public_host" > deploy.env
+  artifacts:
+    reports:
+      dotenv: deploy.env
+    expire_in: 1 day
 
 nuclei-scan:
   stage: scan
@@ -185,8 +192,8 @@ nuclei-scan:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
   script:
-    - ': "${PROD_URL:?Set the public production URL}"'
-    - nuclei -u "$PROD_URL" -severity critical,high,medium -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
+    - ': "${SCAN_URL:?Deploy job must provide SCAN_URL}"'
+    - nuclei -u "$SCAN_URL" -severity critical,high,medium -tags cve,exposure,misconfiguration -jsonl -o nuclei-report.jsonl
   artifacts:
     when: always
     paths: [nuclei-report.jsonl]
