@@ -177,6 +177,23 @@ def test_worker_main_runs_application(monkeypatch: pytest.MonkeyPatch) -> None:
     run.assert_awaited_once_with()
 
 
+async def test_run_serves_health_probes(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: embedding_worker.EmbeddingWorkerApplication,
+) -> None:
+    serve = AsyncMock()
+    monkeypatch.setattr(embedding_worker.health, "serve", serve)
+    monkeypatch.setattr(embedding_worker, "create_worker", Mock(return_value=runtime))
+
+    await embedding_worker.run()
+
+    serve.assert_awaited_once_with(
+        runtime.app,
+        runtime.broker,
+        port=runtime.settings.health_port,
+    )
+
+
 @pytest.mark.parametrize(("healthy", "exit_code"), [(True, 0), (False, 1)])
 def test_worker_main_healthcheck(
     monkeypatch: pytest.MonkeyPatch,

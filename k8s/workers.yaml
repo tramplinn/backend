@@ -182,25 +182,31 @@ spec:
         - python
         - -m
         - tramplin.algo_worker
+        ports:
+        # Ручки здоровья из tramplin.infrastructure.health; порт = health_port в Settings.
+        - name: health
+          containerPort: 8787
         startupProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.algo_worker
-            - healthcheck
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
+          # 60×5s ≈ 5 минут: uvicorn поднимается после импортов и коннекта брокера.
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         readinessProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.algo_worker
-            - healthcheck
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 2
           failureThreshold: 3
       volumes:
       - name: tmp
@@ -400,25 +406,31 @@ spec:
         - python
         - -m
         - tramplin.embedding_worker
+        ports:
+        # Ручки здоровья из tramplin.infrastructure.health; порт = health_port в Settings.
+        - name: health
+          containerPort: 8787
         startupProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.embedding_worker
-            - healthcheck
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
+          # 60×5s ≈ 5 минут: uvicorn поднимается после импортов и коннекта брокера.
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         readinessProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.embedding_worker
-            - healthcheck
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 2
           failureThreshold: 3
       volumes:
       - name: tmp
@@ -618,25 +630,31 @@ spec:
         - python
         - -m
         - tramplin.email_worker
+        ports:
+        # Ручки здоровья из tramplin.infrastructure.health; порт = health_port в Settings.
+        - name: health
+          containerPort: 8787
         startupProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.email_worker
-            - healthcheck
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
+          # 60×5s ≈ 5 минут: uvicorn поднимается после импортов и коннекта брокера.
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         readinessProbe:
-          exec:
-            command:
-            - python
-            - -m
-            - tramplin.email_worker
-            - healthcheck
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 2
           failureThreshold: 3
       volumes:
       - name: tmp

@@ -116,6 +116,10 @@ class Settings(DatabaseSettings):
     email_code_cooldown: Duration = timedelta(seconds=60)
     email_code_max_attempts: int = 5
 
+    # Ручки здоровья воркеров: /health/live и /health/ready (uvicorn слушает
+    # порт в том же процессе, что и брокер). Связка с k8s/workers.yaml.
+    health_port: int = 8787
+
     @property
     def embeddings_enabled(self) -> bool:
         return bool(self.embedding_model and self.llm_api_key.get_secret_value())

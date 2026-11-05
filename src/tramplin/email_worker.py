@@ -6,6 +6,7 @@ from faststream import FastStream
 from faststream.rabbit import QueueType, RabbitBroker, RabbitQueue
 
 from tramplin.core.config import Settings, load_settings
+from tramplin.infrastructure import health as health
 from tramplin.infrastructure.email_queue import FastStreamEmailQueue
 from tramplin.infrastructure.outbox_worker import (
     build_engine_and_sessionmaker,
@@ -78,7 +79,8 @@ def create_worker(settings: Settings | None = None) -> EmailWorkerApplication:
 
 
 async def run() -> None:
-    await create_worker().app.run()
+    worker = create_worker()
+    await health.serve(worker.app, worker.broker, port=worker.settings.health_port)
 
 
 async def rabbitmq_is_healthy(settings: Settings | None = None) -> bool:
